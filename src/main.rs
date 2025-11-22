@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -20,14 +22,32 @@ enum Command {
     },
 }
 
+#[derive(Debug, Deserialize)]
+pub struct AppConfig {
+    pub address: std::net::SocketAddr,
+    pub domain: String,
+    pub start: String,
+    #[serde(default)]
+    pub wait_period: Option<u64>,
+    #[serde(default)]
+    pub health_check: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    #[serde(flatten)]
+    pub apps: HashMap<String, AppConfig>,
+}
+
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let args = Args::parse();
+    let Args { command: Command::Serve { config, address } } = Args::parse();
 
-    dbg!(args);
+    let config = toml::from_str::<Config>(&std::fs::read_to_string(&config)?)?;
+    dbg!(config);
 
     Ok(())
 }
