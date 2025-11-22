@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
+use pingora::ErrorType::InvalidHTTPHeader;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -22,10 +24,9 @@ enum Command {
     },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct AppConfig {
     pub address: std::net::SocketAddr,
-    pub domain: String,
     pub start: String,
     #[serde(default)]
     pub wait_period: Option<u64>,
@@ -39,15 +40,74 @@ pub struct Config {
     pub apps: HashMap<String, AppConfig>,
 }
 
+pub struct YarpProxy {
+    config: Arc<Config>,
+}
 
-#[tokio::main]
-async fn main() -> color_eyre::Result<()> {
-    color_eyre::install()?;
+impl YarpProxy {
+    fn new(config: Config) -> Self {
+        Self {
+            config: Arc::new(config),
+        }
+    }
+}
 
-    let Args { command: Command::Serve { config, address } } = Args::parse();
+#[async_trait::async_trait]
+impl pingora::prelude::ProxyHttp for YarpProxy {
+    type CTX = Option<AppConfig>;
+    fn new_ctx(&self) -> Option<AppConfig> {
+        None
+    }
 
-    let config = toml::from_str::<Config>(&std::fs::read_to_string(&config)?)?;
-    dbg!(config);
+    async fn early_request_filter(
+        &self,
+        session: &mut pingora::prelude::Session,
+        ctx: &mut Self::CTX,
+    ) -> pingora::Result<()> {
+        let host = session
+            .downstream_session
+            .get_header("host")
+            .ok_or_else(|| pingora::Error::explain(InvalidHTTPHeader, "No host header detected"))?
+            .to_str()
+            .map_err(|_| {
+                pingora::Error::explain(
+                    InvalidHTTPHeader,
+                    "Failed to convert host header to string",
+                )
+            })?;
 
-    Ok(())
+        *ctx = self.config.apps.get(host).map(|c| c.to_owned());
+
+        Ok(())
+    }
+
+    async fn upstream_peer(
+        &self,
+        _session: &mut pingora::proxy::Session,
+        _ctx: &mut Self::CTX,
+    ) -> pingora::Result<Box<pingora::prelude::HttpPeer>> {
+        todo!("implement upstream_peer")
+    }
+}
+
+fn main() -> color_eyre::Result<()> {
+    let Args {
+        command: Command::Serve { config, address },
+    } = Args::parse();
+
+    let mut server = pingora::server::Server::new(None).unwrap();
+    server.bootstrap();
+
+    let config = std::fs::read_to_string(config)?;
+    let config: Config = toml::from_str(&config)?;
+
+    let proxy = YarpProxy::new(config);
+
+    let mut proxy_service = pingora::prelude::http_proxy_service(&server.configuration, proxy);
+    proxy_service.add_tcp(&address);
+
+    server.add_service(proxy_service);
+
+    println!("Starting proxy server on {}", address);
+    server.run_forever();
 }

@@ -39,6 +39,7 @@
         default = pkgs.mkShell {
           buildInputs = [
             pkgs.just
+            pkgs.cmake
             pkgs.bacon
             pkgs.openssl
             pkgs.pkg-config
