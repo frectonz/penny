@@ -86,7 +86,7 @@ impl pingora::prelude::ProxyHttp for YarpProxy {
 
     async fn upstream_peer(
         &self,
-        session: &mut pingora::proxy::Session,
+        _session: &mut pingora::proxy::Session,
         ctx: &mut Self::CTX,
     ) -> pingora::Result<Box<pingora::prelude::HttpPeer>> {
         let ctx = ctx.clone().unwrap();
@@ -94,7 +94,7 @@ impl pingora::prelude::ProxyHttp for YarpProxy {
         let address = ctx.address;
         let health_check_path = ctx.health_check.unwrap_or_default();
 
-        let health_check_url = format!("{address}{health_check_path}");
+        let health_check_url = format!("http://{address}{health_check_path}");
 
         let resp = reqwest::get(health_check_url)
             .await
@@ -135,6 +135,6 @@ fn main() -> color_eyre::Result<()> {
 
     server.add_service(proxy_service);
 
-    println!("Starting proxy server on {}", address);
-    server.run_forever();
+    println!("Starting proxy server on {address}");
+    server.run_forever()
 }

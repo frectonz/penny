@@ -1,0 +1,9 @@
+[[language]]
+name = "rust"
+language-servers = ["rust-analyzer"]
+
+[language-server.rust-analyzer.config.files]
+excludeDirs = [".direnv"]
+
+[language-server.rust-analyzer.config.workspace]
+exclude = [".direnv/**"]
