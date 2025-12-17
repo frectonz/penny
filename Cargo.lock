@@ -1439,6 +1439,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
+name = "pennies"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "clap 4.5.53",
+ "color-eyre",
+ "pingora",
+ "reqwest",
+ "serde",
+ "tokio",
+ "toml",
+]
+
+[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3038,20 +3052,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56c1936c4cc7a1c9ab21a1ebb602eb942ba868cbd44a99cb7cdc5892335e1c85"
 dependencies = [
  "linked-hash-map",
-]
-
-[[package]]
-name = "yarp"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "clap 4.5.53",
- "color-eyre",
- "pingora",
- "reqwest",
- "serde",
- "tokio",
- "toml",
 ]
 
 [[package]]
