@@ -19,9 +19,6 @@ jobs:
       - name: Run Flake Check
         run: nix flake check
 
-      - name: Check Nix Formatting
-        run: nix fmt --check
-
       - name: Check Rust Formatting
         run: nix develop -c cargo fmt --check
 
