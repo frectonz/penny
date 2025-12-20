@@ -1440,7 +1440,7 @@ checksum = "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a"
 
 [[package]]
 name = "pennies"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "clap 4.5.53",
