@@ -1,9 +1,11 @@
 use clap::{Parser, Subcommand};
+use jiff::SignedDuration;
 use pingora::ErrorType::InvalidHTTPHeader;
 use pingora::prelude::HttpPeer;
 use reqwest::StatusCode;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -27,15 +29,27 @@ enum Command {
     },
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct AppConfig {
-    pub address: std::net::SocketAddr,
-    pub wait_period: u64,
+    pub address: SocketAddr,
     pub health_check: String,
     pub command: AppCommand,
+
+    #[serde(default = "default_wait_period")]
+    pub wait_period: SignedDuration,
+    #[serde(default = "default_start_timeout")]
+    pub start_timeout: SignedDuration,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+fn default_wait_period() -> SignedDuration {
+    SignedDuration::from_mins(10)
+}
+
+fn default_start_timeout() -> SignedDuration {
+    SignedDuration::from_secs(30)
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(untagged)]
 pub enum AppCommand {
     Start(String),
