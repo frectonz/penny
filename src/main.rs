@@ -6,6 +6,7 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -52,14 +53,73 @@ fn default_start_timeout() -> SignedDuration {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(untagged)]
 pub enum AppCommand {
-    Start(String),
-    StartEnd { start: String, end: String },
+    Start(CommandSpec),
+    StartEnd {
+        start: CommandSpec,
+        end: CommandSpec,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct CommandSpec {
+    program: String,
+    args: Vec<String>,
+}
+
+impl Serialize for CommandSpec {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let program = &self.program;
+        let args = shell_words::join(self.args.as_slice());
+        let command = format!("{program} {args}");
+
+        serializer.serialize_str(&command)
+    }
+}
+
+impl FromStr for CommandSpec {
+    type Err = shell_words::ParseError;
+
+    fn from_str(command: &str) -> Result<Self, Self::Err> {
+        let mut words = shell_words::split(command)?;
+
+        words.reverse();
+
+        let program = words.pop().unwrap_or_else(|| command.to_owned());
+
+        words.reverse();
+
+        Ok(Self {
+            program,
+            args: words,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for CommandSpec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let command = String::deserialize(deserializer)?;
+        CommandSpec::from_str(&command).map_err(serde::de::Error::custom)
+    }
+}
+
+impl CommandSpec {
+    fn to_command(&self) -> tokio::process::Command {
+        let mut command = tokio::process::Command::new(&self.program);
+        command.args(&self.args);
+        command
+    }
 }
 
 impl AppCommand {
-    fn get_start(&self) -> &str {
+    fn get_start(&self) -> tokio::process::Command {
         match self {
-            AppCommand::Start(s) => s,
+            AppCommand::Start(s) => s.to_command(),
             AppCommand::StartEnd { start: _, end: _ } => todo!(),
         }
     }
@@ -134,12 +194,7 @@ impl pingora::prelude::ProxyHttp for YarpProxy {
             .unwrap_or_else(|| StatusCode::SERVICE_UNAVAILABLE);
 
         if resp != StatusCode::OK {
-            let cmd: Vec<_> = ctx.command.get_start().split_whitespace().collect();
-
-            let _ = tokio::process::Command::new(cmd[0])
-                .arg(cmd[1])
-                .spawn()
-                .expect("failed to spawn");
+            let _ = ctx.command.get_start().spawn().expect("failed to spawn");
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
