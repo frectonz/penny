@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::RwLock;
 
 #[derive(Debug, Parser)]
@@ -62,6 +61,8 @@ pub enum AppCommand {
 pub struct CommandSpec {
     program: String,
     args: Vec<String>,
+
+    child: Option<tokio::process::Child>,
 }
 
 impl Serialize for CommandSpec {
@@ -92,6 +93,7 @@ impl FromStr for CommandSpec {
         Ok(Self {
             program,
             args: words,
+            child: None,
         })
     }
 }
@@ -107,19 +109,37 @@ impl<'de> Deserialize<'de> for CommandSpec {
 }
 
 impl CommandSpec {
-    fn to_command(&self) -> tokio::process::Command {
-        let mut command = tokio::process::Command::new(&self.program);
-        command.args(&self.args);
-        command
+    fn run(&mut self) {
+        let child = tokio::process::Command::new(&self.program)
+            .args(&self.args)
+            .spawn()
+            .expect("failed to spawn command");
+
+        self.child = Some(child);
+    }
+
+    async fn kill(&mut self) {
+        if let Some(mut child) = self.child.take() {
+            child.kill().await.expect("failed to kill process")
+        }
     }
 }
 
 impl AppCommand {
-    fn get_start(&self) -> tokio::process::Command {
+    fn start(&mut self) {
+        let start = match self {
+            AppCommand::Start(start) => start,
+            AppCommand::StartEnd { start, end: _ } => start,
+        };
+
+        start.run();
+    }
+
+    async fn stop(&mut self) {
         match self {
-            AppCommand::Start(s) => s.to_command(),
-            AppCommand::StartEnd { start: _, end: _ } => todo!(),
-        }
+            AppCommand::Start(start) => start.kill().await,
+            AppCommand::StartEnd { start: _, end } => end.kill().await,
+        };
     }
 }
 
@@ -137,6 +157,18 @@ impl App {
             .unwrap_or_else(|| http::StatusCode::SERVICE_UNAVAILABLE);
 
         resp == http::StatusCode::OK
+    }
+
+    async fn wait_for_running(&self) -> Result<(), tokio::time::error::Elapsed> {
+        let wait_for_running = async {
+            loop {
+                if self.is_running().await {
+                    break;
+                }
+            }
+        };
+
+        tokio::time::timeout(self.start_timeout.unsigned_abs(), wait_for_running).await
     }
 }
 
@@ -223,11 +255,17 @@ impl pingora::prelude::ProxyHttp for YarpProxy {
             )
         })?;
 
-        let app = ctx.app.read().await;
+        let mut app = ctx.app.write().await;
 
         if !app.is_running().await {
-            let _ = app.command.get_start().spawn().expect("failed to spawn");
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            app.command.start();
+            if app.wait_for_running().await.is_err() {
+                app.command.stop().await;
+                return Err(pingora::Error::explain(
+                    pingora::ErrorType::ConnectError,
+                    "failed to start app",
+                ));
+            }
         }
 
         let peer = pingora::prelude::HttpPeer::new(app.address, false, ctx.host);
