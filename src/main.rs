@@ -53,10 +53,10 @@ fn default_start_timeout() -> SignedDuration {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum AppCommand {
-    Start(CommandSpec),
+    Start(Box<CommandSpec>),
     StartEnd {
-        start: CommandSpec,
-        end: CommandSpec,
+        start: Box<CommandSpec>,
+        end: Box<CommandSpec>,
     },
 }
 
@@ -131,8 +131,8 @@ impl CommandSpec {
 impl AppCommand {
     fn start(&mut self) {
         let start = match self {
-            AppCommand::Start(start) => start,
-            AppCommand::StartEnd { start, end: _ } => start,
+            AppCommand::Start(start) => start.as_mut(),
+            AppCommand::StartEnd { start, end: _ } => start.as_mut(),
         };
 
         start.run();
