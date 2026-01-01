@@ -187,7 +187,7 @@ impl App {
     }
 
     #[instrument(skip(self), fields(timeout = ?self.start_timeout))]
-    async fn wait_for_running(&self) -> Result<(), tokio::time::error::Elapsed> {
+    async fn wait_for_running(&self) -> Result<(), pingora::time::Elapsed> {
         debug!("waiting for app to become ready");
         let wait_for_running = async {
             loop {
@@ -198,7 +198,7 @@ impl App {
         };
 
         let result =
-            tokio::time::timeout(self.start_timeout.unsigned_abs(), wait_for_running).await;
+            pingora::time::timeout(self.start_timeout.unsigned_abs(), wait_for_running).await;
         if result.is_ok() {
             info!("app is now running");
         } else {
@@ -248,7 +248,7 @@ impl App {
             let app = app.clone();
             tokio::spawn(async move {
                 let wait_period = app.read().await.wait_period.unsigned_abs();
-                tokio::time::sleep(wait_period).await;
+                pingora::time::sleep(wait_period).await;
                 info!("wait period elapsed, stopping app");
                 app.write().await.command.stop().await;
             })
