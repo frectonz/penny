@@ -8,6 +8,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, instrument, warn};
 
+static HTTP: once_cell::sync::Lazy<reqwest::Client> =
+    once_cell::sync::Lazy::new(|| reqwest::Client::new());
+
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Args {
@@ -218,7 +221,9 @@ impl App {
 
         debug!(url = %health_check_url, "performing health check");
 
-        let resp = reqwest::get(&health_check_url)
+        let resp = HTTP
+            .get(&health_check_url)
+            .send()
             .await
             .ok()
             .map(|r| r.status())
