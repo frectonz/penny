@@ -121,10 +121,27 @@ impl<'de> Deserialize<'de> for CommandSpec {
 impl CommandSpec {
     #[instrument(skip(self), fields(program = %self.program))]
     fn run(&mut self) {
-        if self.child.is_some() {
-            debug!("child process already exists, skipping spawn");
+        let should_spawn = match self.child.as_mut() {
+            Some(child) => match child.try_wait() {
+                Ok(Some(exit)) => {
+                    warn!("child process exited with code {exit}, need to spawn new one");
+                    true
+                }
+                Ok(None) => {
+                    debug!("child process already exists, skipping spawn");
+                    false
+                }
+                Err(err) => {
+                    error!("failed to wait for child process: {err}");
+                    true
+                }
+            },
+            None => true,
+        };
+
+        if !should_spawn {
             return;
-        }
+        };
 
         info!(args = ?self.args, "spawning command");
         let child = tokio::process::Command::new(&self.program)
