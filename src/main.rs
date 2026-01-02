@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, info, instrument, warn};
 
 static HTTP: once_cell::sync::Lazy<reqwest::Client> =
-    once_cell::sync::Lazy::new(|| reqwest::Client::new());
+    once_cell::sync::Lazy::new(reqwest::Client::new);
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -158,21 +158,33 @@ impl CommandSpec {
         };
 
         info!(args = ?self.args, "spawning command");
-        let child = tokio::process::Command::new(&self.program)
+        match tokio::process::Command::new(&self.program)
             .args(&self.args)
             .spawn()
-            .expect("failed to spawn command");
-
-        self.child = Some(child);
-        debug!("command spawned successfully");
+        {
+            Ok(child) => {
+                self.child = Some(child);
+                debug!("command spawned successfully");
+            }
+            Err(err) => {
+                error!("failed to spawn command: {err}");
+            }
+        };
     }
 
     #[instrument(skip(self), fields(program = %self.program))]
     async fn kill(&mut self) {
         if let Some(mut child) = self.child.take() {
             info!("killing process");
-            child.kill().await.expect("failed to kill process");
-            debug!("process killed successfully");
+
+            match child.kill().await {
+                Ok(()) => {
+                    debug!("process killed successfully");
+                }
+                Err(err) => {
+                    error!("failed to kill process: {err}");
+                }
+            };
         } else {
             debug!("no child process to kill");
         }
