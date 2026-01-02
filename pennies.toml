@@ -6,7 +6,7 @@ command = "bun apps/app1.ts"
 
 ["app2.local"]
 address = "127.0.0.1:3002"
-wait_period = "10m"
+wait_period = "30s"
 health_check = "/api/status"
 
 ["app2.local".command]

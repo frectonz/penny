@@ -38,6 +38,8 @@ pub struct App {
     pub wait_period: SignedDuration,
     #[serde(default = "default_start_timeout")]
     pub start_timeout: SignedDuration,
+    #[serde(default = "default_stop_timeout")]
+    pub stop_timeout: SignedDuration,
 
     #[serde(skip)]
     pub kill_task: Option<tokio::task::JoinHandle<()>>,
@@ -48,6 +50,10 @@ fn default_wait_period() -> SignedDuration {
 }
 
 fn default_start_timeout() -> SignedDuration {
+    SignedDuration::from_secs(30)
+}
+
+fn default_stop_timeout() -> SignedDuration {
     SignedDuration::from_secs(30)
 }
 
@@ -159,7 +165,10 @@ impl AppCommand {
         debug!("stopping app command");
         match self {
             AppCommand::Start(start) => start.kill().await,
-            AppCommand::StartEnd { start: _, end } => end.kill().await,
+            AppCommand::StartEnd { start, end } => {
+                start.kill().await;
+                end.run()
+            }
         };
     }
 }
@@ -207,6 +216,27 @@ impl App {
         result
     }
 
+    #[instrument(skip(self), fields(timeout = ?self.start_timeout))]
+    async fn wait_for_stopped(&self) -> Result<(), pingora::time::Elapsed> {
+        debug!("waiting for app to stop");
+        let wait_for_stopping = async {
+            loop {
+                if !self.is_running().await {
+                    break;
+                }
+            }
+        };
+
+        let result =
+            pingora::time::timeout(self.stop_timeout.unsigned_abs(), wait_for_stopping).await;
+        if result.is_ok() {
+            info!("app is now stopped");
+        } else {
+            warn!("timed out waiting for app to stop");
+        }
+        result
+    }
+
     #[instrument(skip(app))]
     async fn start_app(app: &Arc<RwLock<App>>) -> pingora::Result<()> {
         let app = app.clone();
@@ -218,8 +248,7 @@ impl App {
             app.command.start();
 
             if app.wait_for_running().await.is_err() {
-                error!("failed to start app within timeout, stopping");
-                app.command.stop().await;
+                error!("failed to start app within timeout");
                 return Err(pingora::Error::explain(
                     pingora::ErrorType::ConnectError,
                     "failed to start app",
@@ -251,6 +280,10 @@ impl App {
                 pingora::time::sleep(wait_period).await;
                 info!("wait period elapsed, stopping app");
                 app.write().await.command.stop().await;
+
+                if app.read().await.wait_for_stopped().await.is_err() {
+                    error!("failed to stop app within timeout");
+                }
             })
         };
 
