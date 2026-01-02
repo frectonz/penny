@@ -265,12 +265,14 @@ impl App {
     async fn schedule_kill(app: &Arc<RwLock<App>>) {
         let app = app.clone();
 
-        if let Some(task) = app.write().await.kill_task.take() {
+        let mut app_guard = app.write().await;
+
+        if let Some(task) = app_guard.kill_task.take() {
             debug!("aborting previous kill task");
             task.abort();
         }
 
-        let wait_period = app.read().await.wait_period;
+        let wait_period = app_guard.wait_period;
         info!(wait_period = ?wait_period, "scheduling app shutdown");
 
         let handle = {
@@ -287,7 +289,7 @@ impl App {
             })
         };
 
-        app.write().await.kill_task = Some(handle);
+        app_guard.kill_task = Some(handle);
     }
 }
 
