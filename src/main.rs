@@ -1,10 +1,10 @@
 use clap::{Parser, Subcommand};
 use jiff::SignedDuration;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::{collections::HashMap, time::Duration};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -249,43 +249,55 @@ impl App {
 
     #[instrument(skip(self), fields(timeout = ?self.start_timeout))]
     async fn wait_for_running(&self) -> Result<(), pingora::time::Elapsed> {
-        debug!("waiting for app to become ready");
-        let wait_for_running = async {
-            loop {
-                if self.is_running().await {
-                    break;
-                }
-            }
-        };
+        let strategy = tokio_retry::strategy::ExponentialBackoff::from_millis(10)
+            .max_delay(Duration::from_secs(2))
+            .map(tokio_retry::strategy::jitter);
 
-        let result =
-            pingora::time::timeout(self.start_timeout.unsigned_abs(), wait_for_running).await;
+        debug!("waiting for app to become ready");
+        let wait_for_running = tokio_retry::Retry::spawn(strategy, async || -> Result<(), ()> {
+            if self.is_running().await {
+                Ok(())
+            } else {
+                Err(())
+            }
+        });
+
+        let result = pingora::time::timeout(self.start_timeout.unsigned_abs(), wait_for_running)
+            .await
+            .map(|_| ());
         if result.is_ok() {
             info!("app is now running");
         } else {
             warn!("timed out waiting for app to start");
         }
+
         result
     }
 
     #[instrument(skip(self), fields(timeout = ?self.start_timeout))]
     async fn wait_for_stopped(&self) -> Result<(), pingora::time::Elapsed> {
-        debug!("waiting for app to stop");
-        let wait_for_stopping = async {
-            loop {
-                if !self.is_running().await {
-                    break;
-                }
-            }
-        };
+        let strategy = tokio_retry::strategy::ExponentialBackoff::from_millis(10)
+            .max_delay(Duration::from_secs(2))
+            .map(tokio_retry::strategy::jitter);
 
-        let result =
-            pingora::time::timeout(self.stop_timeout.unsigned_abs(), wait_for_stopping).await;
+        debug!("waiting for app to stop");
+        let wait_for_stopping = tokio_retry::Retry::spawn(strategy, async || -> Result<(), ()> {
+            if self.is_running().await {
+                Err(())
+            } else {
+                Ok(())
+            }
+        });
+
+        let result = pingora::time::timeout(self.stop_timeout.unsigned_abs(), wait_for_stopping)
+            .await
+            .map(|_| ());
         if result.is_ok() {
             info!("app is now stopped");
         } else {
             warn!("timed out waiting for app to stop");
         }
+
         result
     }
 
