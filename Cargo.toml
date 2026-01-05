@@ -1,8 +1,8 @@
 [package]
-name = "pennies"
+name = "penny"
 version = "0.0.4"
 edition = "2024"
-repository = "https://github.com/frectonz/pennies"
+repository = "https://github.com/frectonz/penny"
 
 [dependencies]
 async-trait = "0.1.89"

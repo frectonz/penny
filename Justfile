@@ -2,7 +2,7 @@ default:
   @just --choose
 
 run:
-  cargo r -- serve pennies.toml
+  cargo r -- serve penny.toml
 
 check-app1:
   curl http://localhost:3030/api/status -H "Host: app1"

@@ -1,1 +1,1 @@
-# pennies
+# penny

@@ -497,7 +497,7 @@ fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
     let filter =
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "tracing=info,pennies=debug".to_owned());
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "tracing=info,penny=debug".to_owned());
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
@@ -507,7 +507,7 @@ fn main() -> color_eyre::Result<()> {
         command: Command::Serve { config, address },
     } = Args::parse();
 
-    info!(config = %config, address = %address, "starting pennies proxy");
+    info!(config = %config, address = %address, "starting penny proxy");
 
     let mut server = pingora::server::Server::new(None).unwrap();
     server.bootstrap();
