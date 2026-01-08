@@ -415,14 +415,18 @@ impl App {
 
         let handle = {
             let app = app.clone();
+            let host = host.clone();
             tokio::spawn(async move {
                 let wait_period = app.read().await.wait_period.unsigned_abs();
                 pingora::time::sleep(wait_period).await;
                 info!("wait period elapsed, stopping app");
+
                 app.write().await.command.stop().await;
+                collector.app_stopped(&host).await;
 
                 if app.read().await.wait_for_stopped().await.is_err() {
                     error!("failed to stop app within timeout");
+                    collector.app_stop_failed(&host).await;
                 }
             })
         };
@@ -479,7 +483,7 @@ fn get_host(session: &pingora::prelude::Session) -> Option<&str> {
         .or(session.req_header().uri.host())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Host(String);
 
 #[derive(Debug, Clone)]
@@ -498,7 +502,6 @@ impl RunId {
 }
 
 #[async_trait::async_trait]
-#[allow(dead_code)]
 trait Collector: Sync + Send + Clone + Debug + 'static {
     async fn app_started(&self, host: &Host) -> RunId;
     async fn app_stopped(&self, host: &Host);
