@@ -3,9 +3,11 @@ use jiff::SignedDuration;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::process::Stdio;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -122,11 +124,21 @@ impl<'de> Deserialize<'de> for CommandSpec {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct RunOptions<C: Collector> {
     run_id: RunId,
     collector: C,
+}
+
+impl<C: Collector> RunOptions<C> {
+    async fn append_stdout(&self, line: String) {
+        self.collector.append_stdout(&self.run_id, line).await;
+    }
+
+    async fn append_stderr(&self, line: String) {
+        self.collector.append_stderr(&self.run_id, line).await;
+    }
 }
 
 impl CommandSpec {
@@ -168,9 +180,35 @@ impl CommandSpec {
         info!(args = ?self.args, "spawning command");
         match tokio::process::Command::new(&self.program)
             .args(&self.args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
             .spawn()
         {
-            Ok(child) => {
+            Ok(mut child) => {
+                if let Some(opts) = opts {
+                    if let Some(stdout) = child.stdout.take() {
+                        let mut reader = BufReader::new(stdout).lines();
+
+                        let opts = opts.clone();
+                        tokio::task::spawn(async move {
+                            while let Ok(Some(line)) = reader.next_line().await {
+                                opts.append_stdout(line).await;
+                            }
+                        });
+                    }
+
+                    if let Some(stderr) = child.stderr.take() {
+                        let mut reader = BufReader::new(stderr).lines();
+
+                        let opts = opts.clone();
+                        tokio::task::spawn(async move {
+                            while let Ok(Some(line)) = reader.next_line().await {
+                                opts.append_stderr(line).await;
+                            }
+                        });
+                    }
+                }
+
                 self.child = Some(child);
                 debug!("command spawned successfully");
             }
@@ -428,7 +466,7 @@ fn get_host(session: &pingora::prelude::Session) -> Option<&str> {
 #[derive(Debug)]
 struct Host(String);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct RunId(String);
 
@@ -440,15 +478,15 @@ impl std::fmt::Display for Host {
 
 #[allow(dead_code)]
 #[async_trait::async_trait]
-trait Collector: Sync + Send + Clone + Debug {
+trait Collector: Sync + Send + Clone + Debug + 'static {
     async fn app_started(&self, host: &Host) -> RunId;
     async fn app_stopped(&self, host: &Host);
 
     async fn app_start_failed(&self, host: &Host);
     async fn app_stop_failed(&self, host: &Host);
 
-    async fn append_stdout(&self, run_id: &RunId, data: &[u8]);
-    async fn append_stderr(&self, run_id: &RunId, data: &[u8]);
+    async fn append_stdout(&self, run_id: &RunId, line: String);
+    async fn append_stderr(&self, run_id: &RunId, line: String);
 }
 
 #[derive(Debug, Clone)]
@@ -474,11 +512,11 @@ impl Collector for NoOpCollector {
         unimplemented!()
     }
 
-    async fn append_stdout(&self, run_id: &RunId, data: &[u8]) {
+    async fn append_stdout(&self, run_id: &RunId, line: String) {
         unimplemented!()
     }
 
-    async fn append_stderr(&self, run_id: &RunId, data: &[u8]) {
+    async fn append_stderr(&self, run_id: &RunId, line: String) {
         unimplemented!()
     }
 }
