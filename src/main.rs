@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand};
-use jiff::SignedDuration;
+use jiff::tz::TimeZone;
+use jiff::{SignedDuration, Timestamp, Zoned};
 use serde::{Deserialize, Serialize};
+use sqlx::sqlite::SqliteConnectOptions;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::process::Stdio;
@@ -10,6 +12,7 @@ use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, instrument, warn};
+use ulid::Ulid;
 
 static HTTP: once_cell::sync::Lazy<reqwest::Client> =
     once_cell::sync::Lazy::new(reqwest::Client::new);
@@ -130,7 +133,6 @@ impl<'de> Deserialize<'de> for CommandSpec {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct RunOptions<C: Collector> {
     run_id: RunId,
     collector: C,
@@ -276,7 +278,7 @@ impl AppCommand {
             AppCommand::Start(start) => start.kill().await,
             AppCommand::StartEnd { start, end } => {
                 start.kill().await;
-                end.run::<NoOpCollector>(None)
+                end.run::<SqliteCollector>(None)
             }
         };
     }
@@ -480,7 +482,6 @@ fn get_host(session: &pingora::prelude::Session) -> Option<&str> {
 struct Host(String);
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct RunId(String);
 
 impl std::fmt::Display for Host {
@@ -489,8 +490,14 @@ impl std::fmt::Display for Host {
     }
 }
 
-#[allow(dead_code)]
+impl RunId {
+    fn new() -> Self {
+        Self(Ulid::new().to_string())
+    }
+}
+
 #[async_trait::async_trait]
+#[allow(dead_code)]
 trait Collector: Sync + Send + Clone + Debug + 'static {
     async fn app_started(&self, host: &Host) -> RunId;
     async fn app_stopped(&self, host: &Host);
@@ -503,34 +510,154 @@ trait Collector: Sync + Send + Clone + Debug + 'static {
 }
 
 #[derive(Debug, Clone)]
-struct NoOpCollector;
+struct SqliteCollector {
+    pool: sqlx::SqlitePool,
+}
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
+impl SqliteCollector {
+    async fn new(database_url: &str) -> color_eyre::Result<Self> {
+        let options = SqliteConnectOptions::from_str(database_url)?.create_if_missing(true);
+        let pool = sqlx::SqlitePool::connect_with(options).await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS runs (
+                run_id TEXT PRIMARY KEY,
+                host TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                stopped_at TEXT,
+                start_failed INTEGER NOT NULL DEFAULT 0,
+                stop_failed INTEGER NOT NULL DEFAULT 0
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS stdout (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                line TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                FOREIGN KEY (run_id) REFERENCES runs(run_id)
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS stderr (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                line TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                FOREIGN KEY (run_id) REFERENCES runs(run_id)
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
+        Ok(Self { pool })
+    }
+}
+
 #[async_trait::async_trait]
-impl Collector for NoOpCollector {
+impl Collector for SqliteCollector {
     async fn app_started(&self, host: &Host) -> RunId {
-        unimplemented!()
+        let run_id = RunId::new();
+        let started_at = Zoned::new(Timestamp::now(), TimeZone::UTC)
+            .timestamp()
+            .as_millisecond();
+
+        if let Err(e) = sqlx::query("INSERT INTO runs (run_id, host, started_at) VALUES (?, ?, ?)")
+            .bind(&run_id.0)
+            .bind(&host.0)
+            .bind(started_at)
+            .execute(&self.pool)
+            .await
+        {
+            error!("failed to insert run record: {e}");
+        }
+
+        run_id
     }
 
     async fn app_stopped(&self, host: &Host) {
-        unimplemented!()
+        let stopped_at = Zoned::new(Timestamp::now(), TimeZone::UTC)
+            .timestamp()
+            .as_millisecond();
+
+        if let Err(e) = sqlx::query(
+            "UPDATE runs SET stopped_at = ? WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1",
+        )
+        .bind(stopped_at)
+        .bind(&host.0)
+        .execute(&self.pool)
+        .await
+        {
+            error!("failed to update run record: {e}");
+        }
     }
 
     async fn app_start_failed(&self, host: &Host) {
-        unimplemented!()
+        if let Err(e) = sqlx::query(
+            "UPDATE runs SET start_failed = 1 WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1",
+        )
+        .bind(&host.0)
+        .execute(&self.pool)
+        .await
+        {
+            error!("failed to update run record: {e}");
+        }
     }
 
     async fn app_stop_failed(&self, host: &Host) {
-        unimplemented!()
+        if let Err(e) = sqlx::query(
+            "UPDATE runs SET stop_failed = 1 WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1",
+        )
+        .bind(&host.0)
+        .execute(&self.pool)
+        .await
+        {
+            error!("failed to update run record: {e}");
+        }
     }
 
     async fn append_stdout(&self, run_id: &RunId, line: String) {
-        unimplemented!()
+        let timestamp = Zoned::new(Timestamp::now(), TimeZone::UTC)
+            .timestamp()
+            .as_millisecond();
+
+        if let Err(e) = sqlx::query("INSERT INTO stdout (run_id, line, timestamp) VALUES (?, ?, ?)")
+            .bind(&run_id.0)
+            .bind(&line)
+            .bind(timestamp)
+            .execute(&self.pool)
+            .await
+        {
+            error!("failed to insert stdout line: {e}");
+        }
     }
 
     async fn append_stderr(&self, run_id: &RunId, line: String) {
-        unimplemented!()
+        let timestamp = Zoned::new(Timestamp::now(), TimeZone::UTC)
+            .timestamp()
+            .as_millisecond();
+
+        if let Err(e) = sqlx::query("INSERT INTO stderr (run_id, line, timestamp) VALUES (?, ?, ?)")
+            .bind(&run_id.0)
+            .bind(&line)
+            .bind(timestamp)
+            .execute(&self.pool)
+            .await
+        {
+            error!("failed to insert stderr line: {e}");
+        }
     }
 }
 
@@ -615,8 +742,7 @@ where
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
-    let filter =
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "tracing=info,penny=debug".to_owned());
+    let filter = std::env::var("RUST_LOG").unwrap_or_else(|_| "tracing=info,penny=info".to_owned());
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
@@ -645,7 +771,14 @@ fn main() -> color_eyre::Result<()> {
         );
     }
 
-    let proxy = YarpProxy::new(config, NoOpCollector);
+    let database_url =
+        std::env::var("PENNY_DATABASE_URL").unwrap_or_else(|_| "sqlite://penny.db".to_string());
+
+    let collector = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(SqliteCollector::new(&database_url))?;
+
+    let proxy = YarpProxy::new(config, collector);
 
     let mut proxy_service = pingora::prelude::http_proxy_service(&server.configuration, proxy);
     proxy_service.add_tcp(&address);
