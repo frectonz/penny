@@ -380,13 +380,14 @@ impl App {
             let run_id = collector.app_started(host).await;
 
             info!(%address, "app not running, starting it");
-            app.write()
-                .await
-                .command
-                .start(Some(RunOptions { run_id, collector }));
+            app.write().await.command.start(Some(RunOptions {
+                run_id,
+                collector: collector.clone(),
+            }));
 
             if app.read().await.wait_for_running().await.is_err() {
                 error!("failed to start app within timeout");
+                collector.app_start_failed(host).await;
                 return Err(pingora::Error::explain(
                     pingora::ErrorType::ConnectError,
                     "failed to start app",
