@@ -1,4 +1,4 @@
-name: Build Pennies
+name: CI
 
 on:
   push:

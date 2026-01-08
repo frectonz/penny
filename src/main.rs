@@ -78,6 +78,9 @@ pub struct CommandSpec {
     program: String,
     args: Vec<String>,
 
+    collect_stdout: Option<tokio::task::JoinHandle<()>>,
+    collect_stderr: Option<tokio::task::JoinHandle<()>>,
+
     child: Option<tokio::process::Child>,
 }
 
@@ -109,6 +112,8 @@ impl FromStr for CommandSpec {
         Ok(Self {
             program,
             args: words,
+            collect_stdout: None,
+            collect_stderr: None,
             child: None,
         })
     }
@@ -190,22 +195,22 @@ impl CommandSpec {
                         let mut reader = BufReader::new(stdout).lines();
 
                         let opts = opts.clone();
-                        tokio::task::spawn(async move {
+                        self.collect_stdout = Some(tokio::task::spawn(async move {
                             while let Ok(Some(line)) = reader.next_line().await {
                                 opts.append_stdout(line).await;
                             }
-                        });
+                        }));
                     }
 
                     if let Some(stderr) = child.stderr.take() {
                         let mut reader = BufReader::new(stderr).lines();
 
                         let opts = opts.clone();
-                        tokio::task::spawn(async move {
+                        self.collect_stderr = Some(tokio::task::spawn(async move {
                             while let Ok(Some(line)) = reader.next_line().await {
                                 opts.append_stderr(line).await;
                             }
-                        });
+                        }));
                     }
                 }
 
@@ -233,6 +238,14 @@ impl CommandSpec {
             };
         } else {
             debug!("no child process to kill");
+        }
+
+        if let Some(stdout) = self.collect_stdout.take() {
+            stdout.abort();
+        }
+
+        if let Some(stderr) = self.collect_stderr.take() {
+            stderr.abort();
         }
     }
 }
