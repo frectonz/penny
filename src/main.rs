@@ -451,6 +451,13 @@ where
 pub struct Config {
     #[serde(flatten, deserialize_with = "deserialize_apps")]
     pub apps: HashMap<String, Arc<RwLock<App>>>,
+
+    #[serde(default = "default_database_url")]
+    pub database_url: String,
+}
+
+fn default_database_url() -> String {
+    "sqlite://penny.db".to_owned()
 }
 
 impl Config {
@@ -775,12 +782,9 @@ fn main() -> color_eyre::Result<()> {
         );
     }
 
-    let database_url =
-        std::env::var("PENNY_DATABASE_URL").unwrap_or_else(|_| "sqlite://penny.db".to_string());
-
     let collector = tokio::runtime::Runtime::new()
         .unwrap()
-        .block_on(SqliteCollector::new(&database_url))?;
+        .block_on(SqliteCollector::new(&config.database_url))?;
 
     let proxy = YarpProxy::new(config, collector);
 
