@@ -278,7 +278,7 @@ impl AppCommand {
             AppCommand::Start(start) => start.kill().await,
             AppCommand::StartEnd { start, end } => {
                 start.kill().await;
-                end.run::<SqliteCollector>(None)
+                end.run::<SqliteDatabase>(None)
             }
         };
     }
@@ -508,24 +508,12 @@ impl RunId {
     }
 }
 
-#[async_trait::async_trait]
-trait Collector: Sync + Send + Clone + Debug + 'static {
-    async fn app_started(&self, host: &Host) -> RunId;
-    async fn app_stopped(&self, host: &Host);
-
-    async fn app_start_failed(&self, host: &Host);
-    async fn app_stop_failed(&self, host: &Host);
-
-    async fn append_stdout(&self, run_id: &RunId, line: String);
-    async fn append_stderr(&self, run_id: &RunId, line: String);
-}
-
 #[derive(Debug, Clone)]
-struct SqliteCollector {
+struct SqliteDatabase {
     pool: sqlx::SqlitePool,
 }
 
-impl SqliteCollector {
+impl SqliteDatabase {
     async fn new(database_url: &str) -> color_eyre::Result<Self> {
         let options = SqliteConnectOptions::from_str(database_url)?.create_if_missing(true);
         let pool = sqlx::SqlitePool::connect_with(options).await?;
@@ -578,7 +566,19 @@ impl SqliteCollector {
 }
 
 #[async_trait::async_trait]
-impl Collector for SqliteCollector {
+trait Collector: Sync + Send + Clone + Debug + 'static {
+    async fn app_started(&self, host: &Host) -> RunId;
+    async fn app_stopped(&self, host: &Host);
+
+    async fn app_start_failed(&self, host: &Host);
+    async fn app_stop_failed(&self, host: &Host);
+
+    async fn append_stdout(&self, run_id: &RunId, line: String);
+    async fn append_stderr(&self, run_id: &RunId, line: String);
+}
+
+#[async_trait::async_trait]
+impl Collector for SqliteDatabase {
     async fn app_started(&self, host: &Host) -> RunId {
         let run_id = RunId::new();
         let started_at = Zoned::new(Timestamp::now(), TimeZone::UTC)
@@ -668,6 +668,147 @@ impl Collector for SqliteCollector {
             .await
         {
             error!("failed to insert stderr line: {e}");
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TimeRange {
+    pub start: Option<i64>,
+    pub end: Option<i64>,
+}
+
+impl TimeRange {
+    pub fn new(start: Option<i64>, end: Option<i64>) -> Self {
+        Self { start, end }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TotalOverview {
+    pub total_runs: i64,
+    pub total_awake_time_ms: i64,
+    pub total_sleep_time_ms: i64,
+    pub total_start_failures: i64,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AppOverview {
+    pub host: String,
+    pub total_runs: i64,
+    pub total_awake_time_ms: i64,
+    pub total_sleep_time_ms: i64,
+    pub total_start_failures: i64,
+}
+
+#[async_trait::async_trait]
+pub trait Reporter: Sync + Send + Clone + Debug + 'static {
+    async fn total_overview(&self, time_range: Option<TimeRange>) -> TotalOverview;
+
+    async fn apps_overview(&self, time_range: Option<TimeRange>) -> Vec<AppOverview>;
+}
+
+#[async_trait::async_trait]
+impl Reporter for SqliteDatabase {
+    async fn total_overview(&self, time_range: Option<TimeRange>) -> TotalOverview {
+        let time_range = time_range.unwrap_or_default();
+
+        let query = r#"
+            WITH ordered_runs AS (
+                SELECT
+                    started_at,
+                    stopped_at,
+                    start_failed,
+                    LAG(stopped_at) OVER (ORDER BY started_at) as prev_stopped_at
+                FROM runs
+                WHERE ($1 IS NULL OR started_at >= $1)
+                  AND ($2 IS NULL OR started_at <= $2)
+            )
+            SELECT
+                COUNT(*) as total_runs,
+                COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
+                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0) as total_sleep_time_ms,
+                COALESCE(SUM(start_failed), 0) as total_start_failures
+            FROM ordered_runs
+        "#;
+
+        let row = sqlx::query_as::<_, (i64, i64, i64, i64)>(query)
+            .bind(time_range.start)
+            .bind(time_range.end)
+            .fetch_one(&self.pool)
+            .await;
+
+        match row {
+            Ok((total_runs, total_awake_time_ms, total_sleep_time_ms, total_start_failures)) => {
+                TotalOverview {
+                    total_runs,
+                    total_awake_time_ms,
+                    total_sleep_time_ms,
+                    total_start_failures,
+                }
+            }
+            Err(e) => {
+                error!("failed to query total overview: {e}");
+                TotalOverview::default()
+            }
+        }
+    }
+
+    async fn apps_overview(&self, time_range: Option<TimeRange>) -> Vec<AppOverview> {
+        let time_range = time_range.unwrap_or_default();
+
+        let query = r#"
+            WITH ordered_runs AS (
+                SELECT
+                    host,
+                    started_at,
+                    stopped_at,
+                    start_failed,
+                    LAG(stopped_at) OVER (PARTITION BY host ORDER BY started_at) as prev_stopped_at
+                FROM runs
+                WHERE ($1 IS NULL OR started_at >= $1)
+                  AND ($2 IS NULL OR started_at <= $2)
+            )
+            SELECT
+                host,
+                COUNT(*) as total_runs,
+                COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
+                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0) as total_sleep_time_ms,
+                COALESCE(SUM(start_failed), 0) as total_start_failures
+            FROM ordered_runs
+            GROUP BY host
+            ORDER BY host
+        "#;
+
+        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64)>(query)
+            .bind(time_range.start)
+            .bind(time_range.end)
+            .fetch_all(&self.pool)
+            .await;
+
+        match rows {
+            Ok(rows) => rows
+                .into_iter()
+                .map(
+                    |(
+                        host,
+                        total_runs,
+                        total_awake_time_ms,
+                        total_sleep_time_ms,
+                        total_start_failures,
+                    )| AppOverview {
+                        host,
+                        total_runs,
+                        total_awake_time_ms,
+                        total_sleep_time_ms,
+                        total_start_failures,
+                    },
+                )
+                .collect(),
+            Err(e) => {
+                error!("failed to query apps overview: {e}");
+                Vec::new()
+            }
         }
     }
 }
@@ -784,7 +925,7 @@ fn main() -> color_eyre::Result<()> {
 
     let collector = tokio::runtime::Runtime::new()
         .unwrap()
-        .block_on(SqliteCollector::new(&config.database_url))?;
+        .block_on(SqliteDatabase::new(&config.database_url))?;
 
     let proxy = YarpProxy::new(config, collector);
 
