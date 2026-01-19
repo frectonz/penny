@@ -1,39 +1,29 @@
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import logo from '../logo.svg';
+import { $fetch } from '../lib/api';
 
 export const Route = createFileRoute('/')({
   component: App,
 });
 
 function App() {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['version'],
+    queryFn: async () => {
+      const { data, error } = await $fetch('/api/version');
+      if (error) throw error;
+      return data;
+    },
+  });
+
   return (
-    <div className="text-center">
-      <header className="min-h-screen flex flex-col items-center justify-center bg-[#282c34] text-white text-[calc(10px+2vmin)]">
-        <img
-          src={logo}
-          className="h-[40vmin] pointer-events-none animate-[spin_20s_linear_infinite]"
-          alt="logo"
-        />
-        <p>
-          Edit <code>src/routes/index.tsx</code> and save to reload.
-        </p>
-        <a
-          className="text-[#61dafb] hover:underline"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-        <a
-          className="text-[#61dafb] hover:underline"
-          href="https://tanstack.com"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn TanStack
-        </a>
-      </header>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#282c34] text-white">
+      <h1 className="text-4xl font-bold mb-4">Penny</h1>
+      {isLoading && <p className="text-gray-400">Loading...</p>}
+      {error && <p className="text-red-400">Error: {error.message}</p>}
+      {data && (
+        <p className="text-[#61dafb] text-xl">Version: {data.version}</p>
+      )}
     </div>
   );
 }
