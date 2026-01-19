@@ -30,3 +30,19 @@ jobs:
 
       - name: Build Rust Project
         run: nix develop -c cargo build --release
+
+      - name: Install UI Dependencies
+        run: nix develop -c pnpm install --frozen-lockfile
+        working-directory: ui
+
+      - name: Check UI Formatting
+        run: nix develop -c pnpm check
+        working-directory: ui
+
+      - name: Run UI Lint
+        run: nix develop -c pnpm lint
+        working-directory: ui
+
+      - name: Build UI
+        run: nix develop -c pnpm build
+        working-directory: ui
