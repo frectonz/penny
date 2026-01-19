@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::RwLock;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, error, info, instrument, warn};
 use ulid::Ulid;
 
@@ -884,10 +885,16 @@ async fn apps_overview_handler<R: Reporter>(
 }
 
 fn create_api_router<R: Reporter>(reporter: R) -> Router {
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+
     Router::new()
         .route("/api/version", get(version_handler))
         .route("/api/total-overview", get(total_overview_handler::<R>))
         .route("/api/apps-overview", get(apps_overview_handler::<R>))
+        .layer(cors)
         .with_state(reporter)
 }
 
