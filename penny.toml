@@ -1,3 +1,5 @@
+api_address = "127.0.0.1:3031"
+
 ["app1.local"]
 address = "127.0.0.1:3001"
 wait_period = "1m"

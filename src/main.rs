@@ -1,3 +1,6 @@
+use axum::extract::{Query, State};
+use axum::routing::get;
+use axum::{Json, Router};
 use clap::{Parser, Subcommand};
 use jiff::tz::TimeZone;
 use jiff::{SignedDuration, Timestamp, Zoned};
@@ -449,11 +452,14 @@ where
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    #[serde(flatten, deserialize_with = "deserialize_apps")]
-    pub apps: HashMap<String, Arc<RwLock<App>>>,
+    #[serde(default)]
+    pub api_address: Option<SocketAddr>,
 
     #[serde(default = "default_database_url")]
     pub database_url: String,
+
+    #[serde(flatten, deserialize_with = "deserialize_apps")]
+    pub apps: HashMap<String, Arc<RwLock<App>>>,
 }
 
 fn default_database_url() -> String {
@@ -672,7 +678,7 @@ impl Collector for SqliteDatabase {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TimeRange {
     pub start: Option<i64>,
     pub end: Option<i64>,
@@ -684,7 +690,7 @@ impl TimeRange {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct TotalOverview {
     pub total_runs: i64,
     pub total_awake_time_ms: i64,
@@ -692,7 +698,7 @@ pub struct TotalOverview {
     pub total_start_failures: i64,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct AppOverview {
     pub host: String,
     pub total_runs: i64,
@@ -813,6 +819,49 @@ impl Reporter for SqliteDatabase {
     }
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct VersionResponse {
+    version: &'static str,
+}
+
+async fn version_handler() -> Json<VersionResponse> {
+    Json(VersionResponse {
+        version: env!("CARGO_PKG_VERSION"),
+    })
+}
+
+async fn total_overview_handler<R: Reporter>(
+    State(reporter): State<R>,
+    Query(time_range): Query<TimeRange>,
+) -> Json<TotalOverview> {
+    let time_range = if time_range.start.is_some() || time_range.end.is_some() {
+        Some(time_range)
+    } else {
+        None
+    };
+    Json(reporter.total_overview(time_range).await)
+}
+
+async fn apps_overview_handler<R: Reporter>(
+    State(reporter): State<R>,
+    Query(time_range): Query<TimeRange>,
+) -> Json<Vec<AppOverview>> {
+    let time_range = if time_range.start.is_some() || time_range.end.is_some() {
+        Some(time_range)
+    } else {
+        None
+    };
+    Json(reporter.apps_overview(time_range).await)
+}
+
+fn create_api_router<R: Reporter>(reporter: R) -> Router {
+    Router::new()
+        .route("/api/version", get(version_handler))
+        .route("/api/total-overview", get(total_overview_handler::<R>))
+        .route("/api/apps-overview", get(apps_overview_handler::<R>))
+        .with_state(reporter)
+}
+
 pub struct ProxyContext {
     host: Host,
     app: Arc<RwLock<App>>,
@@ -923,9 +972,18 @@ fn main() -> color_eyre::Result<()> {
         );
     }
 
-    let collector = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(SqliteDatabase::new(&config.database_url))?;
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let collector = runtime.block_on(SqliteDatabase::new(&config.database_url))?;
+
+    if let Some(api_address) = config.api_address {
+        let api_collector = collector.clone();
+        runtime.spawn(async move {
+            let router = create_api_router(api_collector);
+            let listener = tokio::net::TcpListener::bind(api_address).await.unwrap();
+            info!(address = %api_address, "API server listening");
+            axum::serve(listener, router).await.unwrap();
+        });
+    }
 
     let proxy = YarpProxy::new(config, collector);
 
