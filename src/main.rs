@@ -610,7 +610,7 @@ impl Collector for SqliteDatabase {
             .as_millisecond();
 
         if let Err(e) = sqlx::query(
-            "UPDATE runs SET stopped_at = ? WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1",
+            "UPDATE runs SET stopped_at = ? WHERE run_id = (SELECT run_id FROM runs WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1)",
         )
         .bind(stopped_at)
         .bind(&host.0)
@@ -623,7 +623,7 @@ impl Collector for SqliteDatabase {
 
     async fn app_start_failed(&self, host: &Host) {
         if let Err(e) = sqlx::query(
-            "UPDATE runs SET start_failed = 1 WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1",
+            "UPDATE runs SET start_failed = 1 WHERE run_id = (SELECT run_id FROM runs WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1)",
         )
         .bind(&host.0)
         .execute(&self.pool)
@@ -635,7 +635,7 @@ impl Collector for SqliteDatabase {
 
     async fn app_stop_failed(&self, host: &Host) {
         if let Err(e) = sqlx::query(
-            "UPDATE runs SET stop_failed = 1 WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1",
+            "UPDATE runs SET stop_failed = 1 WHERE run_id = (SELECT run_id FROM runs WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1)",
         )
         .bind(&host.0)
         .execute(&self.pool)
