@@ -39,9 +39,11 @@
         default = pkgs.mkShell {
           buildInputs = [
             pkgs.fzf
+            pkgs.pnpm
             pkgs.just
             pkgs.cmake
             pkgs.bacon
+            pkgs.nodejs
             pkgs.openssl
             pkgs.cargo-dist
             pkgs.pkg-config
