@@ -729,11 +729,21 @@ impl Reporter for SqliteDatabase {
                 FROM runs
                 WHERE ($1 IS NULL OR started_at >= $1)
                   AND ($2 IS NULL OR started_at <= $2)
+            ),
+            current_sleep AS (
+                SELECT
+                    CASE 
+                        WHEN NOT EXISTS (SELECT 1 FROM runs WHERE stopped_at IS NULL)
+                        THEN CAST(strftime('%s', 'now') * 1000 AS INTEGER) - 
+                             (SELECT MAX(stopped_at) FROM runs)
+                        ELSE 0
+                    END as ongoing_sleep_ms
             )
             SELECT
                 COUNT(*) as total_runs,
                 COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
-                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0) as total_sleep_time_ms,
+                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0) 
+                    + (SELECT ongoing_sleep_ms FROM current_sleep) as total_sleep_time_ms,
                 COALESCE(SUM(start_failed), 0) as total_start_failures
             FROM ordered_runs
         "#;
@@ -774,16 +784,35 @@ impl Reporter for SqliteDatabase {
                 FROM runs
                 WHERE ($1 IS NULL OR started_at >= $1)
                   AND ($2 IS NULL OR started_at <= $2)
+            ),
+            latest_per_host AS (
+                SELECT
+                    host,
+                    MAX(stopped_at) as last_stopped_at,
+                    MAX(CASE WHEN stopped_at IS NULL THEN 1 ELSE 0 END) as has_running
+                FROM runs
+                GROUP BY host
+            ),
+            current_sleep_per_host AS (
+                SELECT
+                    host,
+                    CASE 
+                        WHEN has_running = 0 AND last_stopped_at IS NOT NULL
+                        THEN CAST(strftime('%s', 'now') * 1000 AS INTEGER) - last_stopped_at
+                        ELSE 0
+                    END as ongoing_sleep_ms
+                FROM latest_per_host
             )
             SELECT
-                host,
+                o.host,
                 COUNT(*) as total_runs,
-                COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
-                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0) as total_sleep_time_ms,
-                COALESCE(SUM(start_failed), 0) as total_start_failures
-            FROM ordered_runs
-            GROUP BY host
-            ORDER BY host
+                COALESCE(SUM(CASE WHEN o.stopped_at IS NOT NULL THEN o.stopped_at - o.started_at ELSE 0 END), 0) as total_awake_time_ms,
+                COALESCE(SUM(CASE WHEN o.prev_stopped_at IS NOT NULL AND o.started_at > o.prev_stopped_at THEN o.started_at - o.prev_stopped_at ELSE 0 END), 0) 
+                    + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep_per_host WHERE host = o.host), 0) as total_sleep_time_ms,
+                COALESCE(SUM(o.start_failed), 0) as total_start_failures
+            FROM ordered_runs o
+            GROUP BY o.host
+            ORDER BY o.host
         "#;
 
         let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64)>(query)
