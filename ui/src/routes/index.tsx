@@ -1,17 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { $fetch, type AppOverview } from '../lib/api';
-import { Skeleton } from '../components/ui/skeleton';
+import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
-  Sun,
-  Moon,
   AlertTriangle,
-  Server,
-  Play,
   Layers,
+  Moon,
+  Play,
+  Server,
+  Sun,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Skeleton } from '../components/ui/skeleton';
+import { $fetch, type AppOverview } from '../lib/api';
 
 export const Route = createFileRoute('/')({
   component: App,
@@ -192,15 +192,34 @@ function AppCardSkeleton() {
 
       {/* Stats grid skeleton */}
       <div className="grid grid-cols-2 gap-4">
-        {Array.from({ length: 4 }).map((_, j) => (
-          <div key={j} className="flex items-center gap-3">
-            <Skeleton className="w-8 h-8 rounded shrink-0" />
-            <div>
-              <Skeleton className="h-3 w-12 mb-1" />
-              <Skeleton className="h-5 w-14" />
-            </div>
+        <div className="flex items-center gap-3">
+          <Skeleton className="w-8 h-8 rounded shrink-0" />
+          <div>
+            <Skeleton className="h-3 w-12 mb-1" />
+            <Skeleton className="h-5 w-14" />
           </div>
-        ))}
+        </div>
+        <div className="flex items-center gap-3">
+          <Skeleton className="w-8 h-8 rounded shrink-0" />
+          <div>
+            <Skeleton className="h-3 w-12 mb-1" />
+            <Skeleton className="h-5 w-14" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Skeleton className="w-8 h-8 rounded shrink-0" />
+          <div>
+            <Skeleton className="h-3 w-12 mb-1" />
+            <Skeleton className="h-5 w-14" />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <Skeleton className="w-8 h-8 rounded shrink-0" />
+          <div>
+            <Skeleton className="h-3 w-12 mb-1" />
+            <Skeleton className="h-5 w-14" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -209,9 +228,9 @@ function AppCardSkeleton() {
 function AppsGridSkeleton() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {Array.from({ length: 3 }).map((_, i) => (
-        <AppCardSkeleton key={i} />
-      ))}
+      <AppCardSkeleton />
+      <AppCardSkeleton />
+      <AppCardSkeleton />
     </div>
   );
 }
@@ -268,7 +287,12 @@ function App() {
       {/* Stats Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {isTotalLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
+          <>
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+          </>
         ) : totalOverview ? (
           <>
             <StatCard

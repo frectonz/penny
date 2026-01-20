@@ -1,5 +1,5 @@
-import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { $fetch } from '../lib/api';
 import { Skeleton } from './ui/skeleton';
 
