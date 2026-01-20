@@ -18,6 +18,10 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, error, info, instrument, warn};
 use ulid::Ulid;
 
+#[derive(rust_embed::RustEmbed)]
+#[folder = "ui/dist"]
+struct UiAssets;
+
 static HTTP: once_cell::sync::Lazy<reqwest::Client> =
     once_cell::sync::Lazy::new(reqwest::Client::new);
 
@@ -860,6 +864,32 @@ async fn version_handler() -> Json<VersionResponse> {
     })
 }
 
+async fn static_handler(uri: axum::http::Uri) -> impl axum::response::IntoResponse {
+    use axum::response::IntoResponse;
+
+    let path = uri.path().trim_start_matches('/');
+
+    // Try to serve the exact file first
+    if let Some(content) = UiAssets::get(path) {
+        let mime = mime_guess::from_path(path).first_or_octet_stream();
+        return (
+            [(axum::http::header::CONTENT_TYPE, mime.as_ref())],
+            content.data.into_owned(),
+        )
+            .into_response();
+    }
+
+    // SPA fallback: serve index.html for all other routes
+    match UiAssets::get("index.html") {
+        Some(content) => (
+            [(axum::http::header::CONTENT_TYPE, "text/html")],
+            content.data.into_owned(),
+        )
+            .into_response(),
+        None => axum::http::StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 async fn total_overview_handler<R: Reporter>(
     State(reporter): State<R>,
     Query(time_range): Query<TimeRange>,
@@ -894,6 +924,7 @@ fn create_api_router<R: Reporter>(reporter: R) -> Router {
         .route("/api/version", get(version_handler))
         .route("/api/total-overview", get(total_overview_handler::<R>))
         .route("/api/apps-overview", get(apps_overview_handler::<R>))
+        .fallback(static_handler)
         .layer(cors)
         .with_state(reporter)
 }
