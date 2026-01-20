@@ -19,18 +19,6 @@ jobs:
       - name: Run Flake Check
         run: nix flake check
 
-      - name: Check Rust Formatting
-        run: nix develop -c cargo fmt --check
-
-      - name: Run Rust Clippy
-        run: nix develop -c cargo clippy -- -D warnings
-
-      - name: Run Rust Tests
-        run: nix develop -c cargo test
-
-      - name: Build Rust Project
-        run: nix develop -c cargo build --release
-
       - name: Install UI Dependencies
         run: nix develop -c pnpm install --frozen-lockfile
         working-directory: ui
@@ -46,3 +34,15 @@ jobs:
       - name: Build UI
         run: nix develop -c pnpm build
         working-directory: ui
+
+      - name: Check Rust Formatting
+        run: nix develop -c cargo fmt --check
+
+      - name: Run Rust Clippy
+        run: nix develop -c cargo clippy -- -D warnings
+
+      - name: Run Rust Tests
+        run: nix develop -c cargo test
+
+      - name: Build Rust Project
+        run: nix develop -c cargo build --release

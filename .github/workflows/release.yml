@@ -139,6 +139,25 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install UI dependencies
+        run: |
+          cd ui
+          pnpm install
+
+      - name: Build UI
+        run: |
+          cd ui
+          pnpm run build
+
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
