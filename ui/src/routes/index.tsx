@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
@@ -10,11 +10,22 @@ import {
   Server,
   Sun,
 } from 'lucide-react';
+import { z } from 'zod';
+import {
+  TimeRangeSelector,
+  type TimeRangeValue,
+} from '../components/TimeRangeSelector';
 import { Skeleton } from '../components/ui/skeleton';
 import { $fetch, type AppOverview } from '../lib/api';
 
+const searchSchema = z.object({
+  start: z.number().optional(),
+  end: z.number().optional(),
+});
+
 export const Route = createFileRoute('/')({
   component: App,
+  validateSearch: searchSchema,
 });
 
 function formatMs(ms: number): string {
@@ -236,15 +247,30 @@ function AppsGridSkeleton() {
 }
 
 function App() {
+  const { start, end } = Route.useSearch();
+  const navigate = useNavigate();
+
+  const timeRange: TimeRangeValue = { start, end };
+
+  const handleTimeRangeChange = (value: TimeRangeValue) => {
+    navigate({
+      to: '/',
+      search: {
+        start: value.start,
+        end: value.end,
+      },
+    });
+  };
+
   const {
     data: totalOverview,
     isLoading: isTotalLoading,
     error: totalError,
   } = useQuery({
-    queryKey: ['total-overview'],
+    queryKey: ['total-overview', start, end],
     queryFn: async () => {
       const { data, error } = await $fetch('/api/total-overview', {
-        query: {},
+        query: { start, end },
       });
       if (error) throw error;
       return data;
@@ -256,10 +282,10 @@ function App() {
     isLoading: isAppsLoading,
     error: appsError,
   } = useQuery({
-    queryKey: ['apps-overview'],
+    queryKey: ['apps-overview', start, end],
     queryFn: async () => {
       const { data, error } = await $fetch('/api/apps-overview', {
-        query: {},
+        query: { start, end },
       });
       if (error) throw error;
       return data;
@@ -270,11 +296,14 @@ function App() {
 
   return (
     <div className="min-h-[calc(100vh-57px)] bg-background bg-grid p-8">
-      <div className="flex items-center gap-3 mb-8">
-        <Activity className="w-6 h-6 text-accent" />
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Dashboard
-        </h1>
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <Activity className="w-6 h-6 text-accent" />
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Dashboard
+          </h1>
+        </div>
+        <TimeRangeSelector value={timeRange} onChange={handleTimeRangeChange} />
       </div>
 
       {error && (
