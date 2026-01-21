@@ -1160,6 +1160,18 @@ async fn app_runs_handler<R: Reporter>(
     Json(reporter.app_runs(&Host(host), time_range).await)
 }
 
+async fn run_logs_handler<R: Reporter>(
+    State(reporter): State<R>,
+    axum::extract::Path(run_id): axum::extract::Path<String>,
+) -> impl axum::response::IntoResponse {
+    use axum::response::IntoResponse;
+
+    match reporter.run_logs(&RunId::from_string(run_id)).await {
+        Some(logs) => Json(logs).into_response(),
+        None => axum::http::StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 fn create_api_router<R: Reporter>(reporter: R) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -1172,6 +1184,7 @@ fn create_api_router<R: Reporter>(reporter: R) -> Router {
         .route("/api/apps-overview", get(apps_overview_handler::<R>))
         .route("/api/app-overview/{host}", get(app_overview_handler::<R>))
         .route("/api/app-runs/{host}", get(app_runs_handler::<R>))
+        .route("/api/run-logs/{run_id}", get(run_logs_handler::<R>))
         .fallback(static_handler)
         .layer(cors)
         .with_state(reporter)
