@@ -1024,7 +1024,7 @@ fn create_api_router<R: Reporter>(reporter: R) -> Router {
         .route("/api/version", get(version_handler))
         .route("/api/total-overview", get(total_overview_handler::<R>))
         .route("/api/apps-overview", get(apps_overview_handler::<R>))
-        .route("/api/app-overview/:host", get(app_overview_handler::<R>))
+        .route("/api/app-overview/{host}", get(app_overview_handler::<R>))
         .fallback(static_handler)
         .layer(cors)
         .with_state(reporter)
