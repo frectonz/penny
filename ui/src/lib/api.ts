@@ -22,6 +22,12 @@ const appOverviewSchema = z.object({
   total_start_failures: z.number(),
 });
 
+const appRunSchema = z.object({
+  start_time_ms: z.number(),
+  end_time_ms: z.number(),
+  total_awake_time_ms: z.number(),
+});
+
 export const schema = createSchema(
   {
     '/api/version': {
@@ -42,6 +48,13 @@ export const schema = createSchema(
       query: timeRangeQuery,
       output: appOverviewSchema,
     },
+    '/api/app-runs/:host': {
+      params: z.object({
+        host: z.string(),
+      }),
+      query: timeRangeQuery,
+      output: z.array(appRunSchema),
+    },
   },
   { strict: true },
 );
@@ -55,3 +68,4 @@ export const $fetch = createFetch({
 export type TimeRange = z.infer<typeof timeRangeQuery>;
 export type TotalOverview = z.infer<typeof totalOverviewSchema>;
 export type AppOverview = z.infer<typeof appOverviewSchema>;
+export type AppRun = z.infer<typeof appRunSchema>;
