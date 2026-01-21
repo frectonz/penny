@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { ArrowLeft, FileText, Terminal } from 'lucide-react';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { PageContainer } from '@/components/PageContainer';
@@ -13,6 +13,7 @@ export const Route = createFileRoute('/run/$runId')({
 
 function RunDetailPage() {
   const { runId } = Route.useParams();
+  const router = useRouter();
 
   const {
     data: runLogs,
@@ -30,12 +31,13 @@ function RunDetailPage() {
     <PageContainer>
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
-        <Link
-          to="/"
+        <button
+          type="button"
+          onClick={() => router.history.back()}
           className="p-2 rounded-lg border border-border bg-card hover:bg-accent/10 transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-        </Link>
+        </button>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-chart-3/10 flex items-center justify-center">
             <Terminal className="w-5 h-5 text-chart-3" />
