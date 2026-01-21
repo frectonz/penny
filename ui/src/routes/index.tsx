@@ -66,7 +66,7 @@ function AppCard({
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground block">
               Runs
             </span>
-            <p className="text-lg font-semibold text-foreground tabular-nums">
+            <p className="text-lg font-semibold text-accent tabular-nums">
               {app.total_runs}
             </p>
           </div>
@@ -95,7 +95,7 @@ function AppCard({
               className={`text-lg font-semibold tabular-nums ${
                 app.total_start_failures > 0
                   ? 'text-destructive'
-                  : 'text-foreground'
+                  : 'text-muted-foreground'
               }`}
             >
               {app.total_start_failures}
@@ -260,24 +260,36 @@ function App() {
               value={totalOverview.total_runs}
               icon={Play}
               iconColor="text-accent"
+              valueClassName="text-accent"
             />
             <StatCard
               title="Awake Time"
               value={formatMs(totalOverview.total_awake_time_ms)}
               icon={Sun}
               iconColor="text-chart-2"
+              valueClassName="text-chart-2"
             />
             <StatCard
               title="Sleep Time"
               value={formatMs(totalOverview.total_sleep_time_ms)}
               icon={Moon}
               iconColor="text-chart-4"
+              valueClassName="text-chart-4"
             />
             <StatCard
               title="Start Failures"
               value={totalOverview.total_start_failures}
               icon={AlertTriangle}
-              iconColor="text-destructive"
+              iconColor={
+                totalOverview.total_start_failures > 0
+                  ? 'text-destructive'
+                  : 'text-muted-foreground'
+              }
+              valueClassName={
+                totalOverview.total_start_failures > 0
+                  ? 'text-destructive'
+                  : 'text-muted-foreground'
+              }
             />
           </>
         ) : null}

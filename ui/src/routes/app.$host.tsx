@@ -129,6 +129,7 @@ function AppDetailPage() {
             value={appOverview.total_runs}
             icon={Play}
             iconColor="text-accent"
+            valueClassName="text-accent"
           />
           <StatCard
             title="Awake Time"
@@ -148,11 +149,15 @@ function AppDetailPage() {
             title="Start Failures"
             value={appOverview.total_start_failures}
             icon={AlertTriangle}
-            iconColor="text-destructive"
+            iconColor={
+              appOverview.total_start_failures > 0
+                ? 'text-destructive'
+                : 'text-muted-foreground'
+            }
             valueClassName={
               appOverview.total_start_failures > 0
                 ? 'text-destructive'
-                : undefined
+                : 'text-muted-foreground'
             }
           />
         </div>
