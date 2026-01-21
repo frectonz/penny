@@ -712,6 +712,13 @@ pub struct AppOverview {
     pub total_start_failures: i64,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct AppRun {
+    pub start_time_ms: i64,
+    pub end_time_ms: i64,
+    pub total_awake_time_ms: i64,
+}
+
 #[async_trait::async_trait]
 pub trait Reporter: Sync + Send + Clone + Debug + 'static {
     async fn total_overview(&self, time_range: Option<TimeRange>) -> TotalOverview;
@@ -720,6 +727,8 @@ pub trait Reporter: Sync + Send + Clone + Debug + 'static {
 
     async fn app_overview(&self, host: &Host, time_range: Option<TimeRange>)
     -> Option<AppOverview>;
+
+    async fn app_runs(&self, host: &Host, time_range: Option<TimeRange>) -> Vec<AppRun>;
 }
 
 #[async_trait::async_trait]
@@ -932,6 +941,47 @@ impl Reporter for SqliteDatabase {
             }
         }
     }
+
+    async fn app_runs(&self, host: &Host, time_range: Option<TimeRange>) -> Vec<AppRun> {
+        let time_range = time_range.unwrap_or_default();
+
+        let query = r#"
+            SELECT
+                started_at,
+                COALESCE(stopped_at, CAST(strftime('%s', 'now') * 1000 AS INTEGER)) as end_time,
+                CASE
+                    WHEN stopped_at IS NOT NULL THEN stopped_at - started_at
+                    ELSE CAST(strftime('%s', 'now') * 1000 AS INTEGER) - started_at
+                END as awake_time
+            FROM runs
+            WHERE host = $1
+              AND ($2 IS NULL OR started_at >= $2)
+              AND ($3 IS NULL OR started_at <= $3)
+            ORDER BY started_at DESC
+        "#;
+
+        let rows = sqlx::query_as::<_, (i64, i64, i64)>(query)
+            .bind(&host.0)
+            .bind(time_range.start)
+            .bind(time_range.end)
+            .fetch_all(&self.pool)
+            .await;
+
+        match rows {
+            Ok(rows) => rows
+                .into_iter()
+                .map(|(start_time_ms, end_time_ms, total_awake_time_ms)| AppRun {
+                    start_time_ms,
+                    end_time_ms,
+                    total_awake_time_ms,
+                })
+                .collect(),
+            Err(e) => {
+                error!("failed to query app runs: {e}");
+                Vec::new()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1014,6 +1064,20 @@ async fn app_overview_handler<R: Reporter>(
     }
 }
 
+async fn app_runs_handler<R: Reporter>(
+    State(reporter): State<R>,
+    axum::extract::Path(host): axum::extract::Path<String>,
+    Query(time_range): Query<TimeRange>,
+) -> Json<Vec<AppRun>> {
+    let time_range = if time_range.start.is_some() || time_range.end.is_some() {
+        Some(time_range)
+    } else {
+        None
+    };
+
+    Json(reporter.app_runs(&Host(host), time_range).await)
+}
+
 fn create_api_router<R: Reporter>(reporter: R) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -1025,6 +1089,7 @@ fn create_api_router<R: Reporter>(reporter: R) -> Router {
         .route("/api/total-overview", get(total_overview_handler::<R>))
         .route("/api/apps-overview", get(apps_overview_handler::<R>))
         .route("/api/app-overview/{host}", get(app_overview_handler::<R>))
+        .route("/api/app-runs/{host}", get(app_runs_handler::<R>))
         .fallback(static_handler)
         .layer(cors)
         .with_state(reporter)
