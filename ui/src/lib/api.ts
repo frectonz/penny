@@ -35,6 +35,13 @@ export const schema = createSchema(
       query: timeRangeQuery,
       output: z.array(appOverviewSchema),
     },
+    '/api/app-overview/:host': {
+      params: z.object({
+        host: z.string(),
+      }),
+      query: timeRangeQuery,
+      output: appOverviewSchema,
+    },
   },
   { strict: true },
 );

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
@@ -89,9 +89,20 @@ function StatCardSkeleton() {
   );
 }
 
-function AppCard({ app }: { app: AppOverview }) {
+function AppCard({
+  app,
+  timeRange,
+}: {
+  app: AppOverview;
+  timeRange: TimeRangeValue;
+}) {
   return (
-    <div className="p-5 border border-border rounded bg-card hover:border-accent/50 transition-colors h-full">
+    <Link
+      to="/app/$host"
+      params={{ host: app.host }}
+      search={{ start: timeRange.start, end: timeRange.end }}
+      className="block p-5 border border-border rounded bg-card hover:border-accent/50 transition-colors h-full cursor-pointer"
+    >
       {/* Header with host */}
       <div className="flex items-center gap-3 mb-5 pb-4 border-b border-border">
         <div className="w-10 h-10 rounded bg-chart-3/10 flex items-center justify-center shrink-0">
@@ -185,7 +196,7 @@ function AppCard({ app }: { app: AppOverview }) {
           </div>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -365,7 +376,7 @@ function App() {
         ) : appsOverview && appsOverview.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {appsOverview.map((app) => (
-              <AppCard key={app.host} app={app} />
+              <AppCard key={app.host} app={app} timeRange={timeRange} />
             ))}
           </div>
         ) : (
