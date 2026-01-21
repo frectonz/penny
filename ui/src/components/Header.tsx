@@ -21,8 +21,9 @@ export default function Header() {
           viewBox="0 0 100 100"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          aria-label="Penny Logo"
+          role="img"
         >
+          <title>Penny Logo</title>
           <circle
             cx="50"
             cy="50"
