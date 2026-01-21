@@ -23,9 +23,20 @@ const appOverviewSchema = z.object({
 });
 
 const appRunSchema = z.object({
+  run_id: z.string(),
   start_time_ms: z.number(),
   end_time_ms: z.number(),
   total_awake_time_ms: z.number(),
+});
+
+const logEntrySchema = z.object({
+  line: z.string(),
+  timestamp: z.number(),
+});
+
+const runLogsSchema = z.object({
+  stdout: z.array(logEntrySchema),
+  stderr: z.array(logEntrySchema),
 });
 
 export const schema = createSchema(
@@ -55,6 +66,12 @@ export const schema = createSchema(
       query: timeRangeQuery,
       output: z.array(appRunSchema),
     },
+    '/api/run-logs/:run_id': {
+      params: z.object({
+        run_id: z.string(),
+      }),
+      output: runLogsSchema,
+    },
   },
   { strict: true },
 );
@@ -69,3 +86,5 @@ export type TimeRange = z.infer<typeof timeRangeQuery>;
 export type TotalOverview = z.infer<typeof totalOverviewSchema>;
 export type AppOverview = z.infer<typeof appOverviewSchema>;
 export type AppRun = z.infer<typeof appRunSchema>;
+export type LogEntry = z.infer<typeof logEntrySchema>;
+export type RunLogs = z.infer<typeof runLogsSchema>;

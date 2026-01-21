@@ -505,7 +505,7 @@ fn get_host(session: &pingora::prelude::Session) -> Option<&str> {
 pub struct Host(pub String);
 
 #[derive(Debug, Clone)]
-struct RunId(String);
+pub struct RunId(String);
 
 impl std::fmt::Display for Host {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -516,6 +516,10 @@ impl std::fmt::Display for Host {
 impl RunId {
     fn new() -> Self {
         Self(Ulid::new().to_string())
+    }
+
+    pub fn from_string(s: String) -> Self {
+        Self(s)
     }
 }
 
@@ -714,9 +718,22 @@ pub struct AppOverview {
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct AppRun {
+    pub run_id: String,
     pub start_time_ms: i64,
     pub end_time_ms: i64,
     pub total_awake_time_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct LogEntry {
+    pub line: String,
+    pub timestamp: i64,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct RunLogs {
+    pub stdout: Vec<LogEntry>,
+    pub stderr: Vec<LogEntry>,
 }
 
 #[async_trait::async_trait]
@@ -729,6 +746,8 @@ pub trait Reporter: Sync + Send + Clone + Debug + 'static {
     -> Option<AppOverview>;
 
     async fn app_runs(&self, host: &Host, time_range: Option<TimeRange>) -> Vec<AppRun>;
+
+    async fn run_logs(&self, run_id: &RunId) -> Option<RunLogs>;
 }
 
 #[async_trait::async_trait]
@@ -947,6 +966,7 @@ impl Reporter for SqliteDatabase {
 
         let query = r#"
             SELECT
+                run_id,
                 started_at,
                 COALESCE(stopped_at, CAST(strftime('%s', 'now') * 1000 AS INTEGER)) as end_time,
                 CASE
@@ -960,7 +980,7 @@ impl Reporter for SqliteDatabase {
             ORDER BY started_at DESC
         "#;
 
-        let rows = sqlx::query_as::<_, (i64, i64, i64)>(query)
+        let rows = sqlx::query_as::<_, (String, i64, i64, i64)>(query)
             .bind(&host.0)
             .bind(time_range.start)
             .bind(time_range.end)
@@ -970,17 +990,79 @@ impl Reporter for SqliteDatabase {
         match rows {
             Ok(rows) => rows
                 .into_iter()
-                .map(|(start_time_ms, end_time_ms, total_awake_time_ms)| AppRun {
-                    start_time_ms,
-                    end_time_ms,
-                    total_awake_time_ms,
-                })
+                .map(
+                    |(run_id, start_time_ms, end_time_ms, total_awake_time_ms)| AppRun {
+                        run_id,
+                        start_time_ms,
+                        end_time_ms,
+                        total_awake_time_ms,
+                    },
+                )
                 .collect(),
             Err(e) => {
                 error!("failed to query app runs: {e}");
                 Vec::new()
             }
         }
+    }
+
+    async fn run_logs(&self, run_id: &RunId) -> Option<RunLogs> {
+        let exists_query = "SELECT 1 FROM runs WHERE run_id = $1";
+        let exists = sqlx::query_scalar::<_, i32>(exists_query)
+            .bind(&run_id.0)
+            .fetch_optional(&self.pool)
+            .await
+            .ok()
+            .flatten()
+            .is_some();
+
+        if !exists {
+            return None;
+        }
+
+        let stdout_query = r#"
+            SELECT line, timestamp
+            FROM stdout
+            WHERE run_id = $1
+            ORDER BY timestamp ASC
+        "#;
+
+        let stderr_query = r#"
+            SELECT line, timestamp
+            FROM stderr
+            WHERE run_id = $1
+            ORDER BY timestamp ASC
+        "#;
+
+        let stdout = sqlx::query_as::<_, (String, i64)>(stdout_query)
+            .bind(&run_id.0)
+            .fetch_all(&self.pool)
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|(line, timestamp)| LogEntry { line, timestamp })
+                    .collect()
+            })
+            .unwrap_or_else(|e| {
+                error!("failed to query stdout logs: {e}");
+                Vec::new()
+            });
+
+        let stderr = sqlx::query_as::<_, (String, i64)>(stderr_query)
+            .bind(&run_id.0)
+            .fetch_all(&self.pool)
+            .await
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|(line, timestamp)| LogEntry { line, timestamp })
+                    .collect()
+            })
+            .unwrap_or_else(|e| {
+                error!("failed to query stderr logs: {e}");
+                Vec::new()
+            });
+
+        Some(RunLogs { stdout, stderr })
     }
 }
 
