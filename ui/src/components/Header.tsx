@@ -1,16 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { $fetch } from '../lib/api';
-import { Skeleton } from './ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
+import { $fetch } from '@/lib/api';
 
 export default function Header() {
   const { data, isLoading } = useQuery({
     queryKey: ['version'],
-    queryFn: async () => {
-      const { data, error } = await $fetch('/api/version');
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => $fetch('/api/version'),
   });
 
   return (

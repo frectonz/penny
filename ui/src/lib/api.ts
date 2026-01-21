@@ -49,6 +49,7 @@ export const schema = createSchema(
 export const $fetch = createFetch({
   baseURL: env.VITE_API_URL ?? '',
   schema,
+  throw: true,
 });
 
 export type TimeRange = z.infer<typeof timeRangeQuery>;

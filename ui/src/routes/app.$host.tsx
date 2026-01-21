@@ -8,92 +8,21 @@ import {
   Server,
   Sun,
 } from 'lucide-react';
-import { z } from 'zod';
+import { ErrorBanner } from '@/components/ErrorBanner';
+import { PageContainer } from '@/components/PageContainer';
+import { StatCard, StatCardSkeleton } from '@/components/StatCard';
 import {
   TimeRangeSelector,
   type TimeRangeValue,
-} from '../components/TimeRangeSelector';
-import { Skeleton } from '../components/ui/skeleton';
-import { $fetch } from '../lib/api';
-
-const searchSchema = z.object({
-  start: z.number().optional(),
-  end: z.number().optional(),
-});
+} from '@/components/TimeRangeSelector';
+import { $fetch } from '@/lib/api';
+import { formatMs } from '@/lib/format';
+import { timeRangeSearchSchema } from '@/lib/searchSchemas';
 
 export const Route = createFileRoute('/app/$host')({
   component: AppDetailPage,
-  validateSearch: searchSchema,
+  validateSearch: timeRangeSearchSchema,
 });
-
-function formatMs(ms: number): string {
-  if (ms < 1000) {
-    return `${ms}ms`;
-  }
-
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    const remainingSeconds = seconds % 60;
-    return remainingSeconds > 0
-      ? `${minutes}m ${remainingSeconds}s`
-      : `${minutes}m`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-}
-
-function StatCard({
-  title,
-  value,
-  icon: Icon,
-  iconColor,
-  valueColor,
-}: {
-  title: string;
-  value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
-  iconColor: string;
-  valueColor?: string;
-}) {
-  return (
-    <div className="p-6 border border-border rounded bg-card">
-      <div className="flex items-center gap-3 mb-4">
-        <div
-          className={`w-12 h-12 rounded-lg ${iconColor.replace('text-', 'bg-')}/10 flex items-center justify-center`}
-        >
-          <Icon className={`w-6 h-6 ${iconColor}`} />
-        </div>
-        <span className="text-sm uppercase tracking-widest text-muted-foreground">
-          {title}
-        </span>
-      </div>
-      <p
-        className={`text-4xl font-bold tabular-nums ${valueColor || 'text-foreground'}`}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function StatCardSkeleton() {
-  return (
-    <div className="p-6 border border-border rounded bg-card">
-      <div className="flex items-center gap-3 mb-4">
-        <Skeleton className="w-12 h-12 rounded-lg" />
-        <Skeleton className="h-4 w-24" />
-      </div>
-      <Skeleton className="h-10 w-32" />
-    </div>
-  );
-}
 
 function AppDetailPage() {
   const { host } = Route.useParams();
@@ -119,18 +48,15 @@ function AppDetailPage() {
     error,
   } = useQuery({
     queryKey: ['app-overview', host, start, end],
-    queryFn: async () => {
-      const { data, error } = await $fetch('/api/app-overview/:host', {
+    queryFn: () =>
+      $fetch('/api/app-overview/:host', {
         params: { host },
         query: { start, end },
-      });
-      if (error) throw error;
-      return data;
-    },
+      }),
   });
 
   return (
-    <div className="min-h-[calc(100vh-57px)] bg-background bg-grid p-8">
+    <PageContainer>
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
@@ -160,12 +86,9 @@ function AppDetailPage() {
 
       {/* Error State */}
       {error && (
-        <div className="px-5 py-4 mb-8 border border-destructive rounded bg-destructive/10 flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
-          <p className="text-destructive text-sm">
-            {error.message || 'Failed to load application data'}
-          </p>
-        </div>
+        <ErrorBanner
+          message={error.message || 'Failed to load application data'}
+        />
       )}
 
       {/* Loading State */}
@@ -202,21 +125,21 @@ function AppDetailPage() {
             value={formatMs(appOverview.total_awake_time_ms)}
             icon={Sun}
             iconColor="text-chart-2"
-            valueColor="text-chart-2"
+            valueClassName="text-chart-2"
           />
           <StatCard
             title="Sleep Time"
             value={formatMs(appOverview.total_sleep_time_ms)}
             icon={Moon}
             iconColor="text-chart-4"
-            valueColor="text-chart-4"
+            valueClassName="text-chart-4"
           />
           <StatCard
             title="Start Failures"
             value={appOverview.total_start_failures}
             icon={AlertTriangle}
             iconColor="text-destructive"
-            valueColor={
+            valueClassName={
               appOverview.total_start_failures > 0
                 ? 'text-destructive'
                 : undefined
@@ -224,6 +147,6 @@ function AppDetailPage() {
           />
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

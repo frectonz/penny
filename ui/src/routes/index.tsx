@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
-import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
   AlertTriangle,
@@ -10,84 +9,22 @@ import {
   Server,
   Sun,
 } from 'lucide-react';
-import { z } from 'zod';
+import { ErrorBanner } from '@/components/ErrorBanner';
+import { PageContainer } from '@/components/PageContainer';
+import { StatCard, StatCardSkeleton } from '@/components/StatCard';
 import {
   TimeRangeSelector,
   type TimeRangeValue,
-} from '../components/TimeRangeSelector';
-import { Skeleton } from '../components/ui/skeleton';
-import { $fetch, type AppOverview } from '../lib/api';
-
-const searchSchema = z.object({
-  start: z.number().optional(),
-  end: z.number().optional(),
-});
+} from '@/components/TimeRangeSelector';
+import { Skeleton } from '@/components/ui/skeleton';
+import { $fetch, type AppOverview } from '@/lib/api';
+import { formatMs } from '@/lib/format';
+import { timeRangeSearchSchema } from '@/lib/searchSchemas';
 
 export const Route = createFileRoute('/')({
   component: App,
-  validateSearch: searchSchema,
+  validateSearch: timeRangeSearchSchema,
 });
-
-function formatMs(ms: number): string {
-  if (ms < 1000) {
-    return `${ms}ms`;
-  }
-
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    const remainingSeconds = seconds % 60;
-    return remainingSeconds > 0
-      ? `${minutes}m ${remainingSeconds}s`
-      : `${minutes}m`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-}
-
-function StatCard({
-  title,
-  value,
-  icon: Icon,
-  iconColor,
-}: {
-  title: string;
-  value: string | number;
-  icon: LucideIcon;
-  iconColor: string;
-}) {
-  return (
-    <div className="p-5 border border-border rounded bg-card h-full">
-      <div className="flex items-center gap-2 mb-3">
-        <Icon className={`w-4 h-4 ${iconColor} shrink-0`} />
-        <span className="text-xs uppercase tracking-widest text-muted-foreground">
-          {title}
-        </span>
-      </div>
-      <p className="text-3xl font-semibold text-foreground tabular-nums">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function StatCardSkeleton() {
-  return (
-    <div className="p-5 border border-border rounded bg-card h-full">
-      <div className="flex items-center gap-2 mb-3">
-        <Skeleton className="h-4 w-4 rounded shrink-0" />
-        <Skeleton className="h-4 w-24" />
-      </div>
-      <Skeleton className="h-9 w-20" />
-    </div>
-  );
-}
 
 function AppCard({
   app,
@@ -279,13 +216,7 @@ function App() {
     error: totalError,
   } = useQuery({
     queryKey: ['total-overview', start, end],
-    queryFn: async () => {
-      const { data, error } = await $fetch('/api/total-overview', {
-        query: { start, end },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => $fetch('/api/total-overview', { query: { start, end } }),
   });
 
   const {
@@ -294,19 +225,13 @@ function App() {
     error: appsError,
   } = useQuery({
     queryKey: ['apps-overview', start, end],
-    queryFn: async () => {
-      const { data, error } = await $fetch('/api/apps-overview', {
-        query: { start, end },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => $fetch('/api/apps-overview', { query: { start, end } }),
   });
 
   const error = totalError || appsError;
 
   return (
-    <div className="min-h-[calc(100vh-57px)] bg-background bg-grid p-8">
+    <PageContainer>
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <Activity className="w-6 h-6 text-accent" />
@@ -317,12 +242,7 @@ function App() {
         <TimeRangeSelector value={timeRange} onChange={handleTimeRangeChange} />
       </div>
 
-      {error && (
-        <div className="px-5 py-4 mb-8 border border-destructive rounded bg-destructive/10 flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
-          <p className="text-destructive text-sm">Error: {error.message}</p>
-        </div>
-      )}
+      {error && <ErrorBanner message={`Error: ${error.message}`} />}
 
       {/* Stats Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -388,6 +308,6 @@ function App() {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
