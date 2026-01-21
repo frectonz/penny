@@ -534,8 +534,8 @@ impl SqliteDatabase {
             CREATE TABLE IF NOT EXISTS runs (
                 run_id TEXT PRIMARY KEY,
                 host TEXT NOT NULL,
-                started_at TEXT NOT NULL,
-                stopped_at TEXT,
+                started_at INTEGER NOT NULL,
+                stopped_at INTEGER,
                 start_failed INTEGER NOT NULL DEFAULT 0,
                 stop_failed INTEGER NOT NULL DEFAULT 0
             )
