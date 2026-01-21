@@ -502,7 +502,7 @@ fn get_host(session: &pingora::prelude::Session) -> Option<&str> {
 }
 
 #[derive(Debug, Clone)]
-struct Host(String);
+pub struct Host(pub String);
 
 #[derive(Debug, Clone)]
 struct RunId(String);
@@ -717,6 +717,9 @@ pub trait Reporter: Sync + Send + Clone + Debug + 'static {
     async fn total_overview(&self, time_range: Option<TimeRange>) -> TotalOverview;
 
     async fn apps_overview(&self, time_range: Option<TimeRange>) -> Vec<AppOverview>;
+
+    async fn app_overview(&self, host: &Host, time_range: Option<TimeRange>)
+    -> Option<AppOverview>;
 }
 
 #[async_trait::async_trait]
@@ -851,6 +854,84 @@ impl Reporter for SqliteDatabase {
             }
         }
     }
+
+    async fn app_overview(
+        &self,
+        host: &Host,
+        time_range: Option<TimeRange>,
+    ) -> Option<AppOverview> {
+        let time_range = time_range.unwrap_or_default();
+
+        let query = r#"
+            WITH ordered_runs AS (
+                SELECT
+                    host,
+                    started_at,
+                    stopped_at,
+                    start_failed,
+                    LAG(stopped_at) OVER (ORDER BY started_at) as prev_stopped_at
+                FROM runs
+                WHERE host = $1
+                  AND ($2 IS NULL OR started_at >= $2)
+                  AND ($3 IS NULL OR started_at <= $3)
+            ),
+            latest_info AS (
+                SELECT
+                    MAX(stopped_at) as last_stopped_at,
+                    MAX(CASE WHEN stopped_at IS NULL THEN 1 ELSE 0 END) as has_running
+                FROM runs
+                WHERE host = $1
+            ),
+            current_sleep AS (
+                SELECT
+                    CASE 
+                        WHEN has_running = 0 AND last_stopped_at IS NOT NULL
+                        THEN CAST(strftime('%s', 'now') * 1000 AS INTEGER) - last_stopped_at
+                        ELSE 0
+                    END as ongoing_sleep_ms
+                FROM latest_info
+            )
+            SELECT
+                COUNT(*) as total_runs,
+                COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
+                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0) 
+                    + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep), 0) as total_sleep_time_ms,
+                COALESCE(SUM(start_failed), 0) as total_start_failures
+            FROM ordered_runs
+        "#;
+
+        let row = sqlx::query_as::<_, (i64, i64, i64, i64)>(query)
+            .bind(&host.0)
+            .bind(time_range.start)
+            .bind(time_range.end)
+            .fetch_optional(&self.pool)
+            .await;
+
+        match row {
+            Ok(Some((
+                total_runs,
+                total_awake_time_ms,
+                total_sleep_time_ms,
+                total_start_failures,
+            ))) => {
+                if total_runs == 0 {
+                    return None;
+                }
+                Some(AppOverview {
+                    host: host.0.clone(),
+                    total_runs,
+                    total_awake_time_ms,
+                    total_sleep_time_ms,
+                    total_start_failures,
+                })
+            }
+            Ok(None) => None,
+            Err(e) => {
+                error!("failed to query app overview: {e}");
+                None
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -914,6 +995,25 @@ async fn apps_overview_handler<R: Reporter>(
     Json(reporter.apps_overview(time_range).await)
 }
 
+async fn app_overview_handler<R: Reporter>(
+    State(reporter): State<R>,
+    axum::extract::Path(host): axum::extract::Path<String>,
+    Query(time_range): Query<TimeRange>,
+) -> impl axum::response::IntoResponse {
+    use axum::response::IntoResponse;
+
+    let time_range = if time_range.start.is_some() || time_range.end.is_some() {
+        Some(time_range)
+    } else {
+        None
+    };
+
+    match reporter.app_overview(&Host(host), time_range).await {
+        Some(overview) => Json(overview).into_response(),
+        None => axum::http::StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 fn create_api_router<R: Reporter>(reporter: R) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -924,6 +1024,7 @@ fn create_api_router<R: Reporter>(reporter: R) -> Router {
         .route("/api/version", get(version_handler))
         .route("/api/total-overview", get(total_overview_handler::<R>))
         .route("/api/apps-overview", get(apps_overview_handler::<R>))
+        .route("/api/app-overview/:host", get(app_overview_handler::<R>))
         .fallback(static_handler)
         .layer(cors)
         .with_state(reporter)
