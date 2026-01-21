@@ -11,14 +11,48 @@ export default function Header() {
 
   return (
     <header className="px-6 py-4 flex items-center justify-between bg-background border-b border-border">
-      <h1 className="text-md font-semibold tracking-wider">
-        <Link
-          to="/"
-          className="text-foreground hover:text-accent transition-colors"
+      <Link
+        to="/"
+        className="flex items-center gap-2 text-foreground hover:text-accent transition-colors"
+      >
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 100 100"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-label="Penny Logo"
         >
-          PENNY.
-        </Link>
-      </h1>
+          <circle
+            cx="50"
+            cy="50"
+            r="45"
+            stroke="currentColor"
+            strokeWidth="6"
+            fill="none"
+          />
+          <circle
+            cx="50"
+            cy="50"
+            r="35"
+            stroke="currentColor"
+            strokeWidth="3"
+            fill="none"
+          />
+          <text
+            x="50"
+            y="58"
+            textAnchor="middle"
+            fill="currentColor"
+            fontSize="36"
+            fontWeight="bold"
+            fontFamily="system-ui, sans-serif"
+          >
+            P
+          </text>
+        </svg>
+        <h1 className="text-md font-semibold tracking-wider">PENNY.</h1>
+      </Link>
       <nav className="flex items-center gap-2">
         <a
           href="https://github.com/frectonz/penny"
