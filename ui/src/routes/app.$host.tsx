@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
   AlertTriangle,
   ArrowLeft,
+  Circle,
   Moon,
   Play,
   Server,
@@ -50,6 +51,15 @@ function AppDetailPage() {
     queryKey: ['app-overview', host, start, end],
     queryFn: () =>
       $fetch('/api/app-overview/:host', {
+        params: { host },
+        query: { start, end },
+      }),
+  });
+
+  const { data: appRuns, isLoading: isLoadingRuns } = useQuery({
+    queryKey: ['app-runs', host, start, end],
+    queryFn: () =>
+      $fetch('/api/app-runs/:host', {
         params: { host },
         query: { start, end },
       }),
@@ -145,6 +155,87 @@ function AppDetailPage() {
                 : undefined
             }
           />
+        </div>
+      )}
+
+      {/* Runs Timeline */}
+      {isLoadingRuns && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-foreground mb-4">
+            Run History
+          </h2>
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
+                <div className="flex-1 h-16 rounded-lg bg-muted animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {appRuns && appRuns.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-foreground mb-4">
+            Run History
+          </h2>
+          <div className="relative">
+            {/* Timeline line */}
+            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
+
+            {/* Timeline items */}
+            <div className="space-y-4">
+              {appRuns.map((run, index) => {
+                const runNumber = appRuns.length - index;
+                const startDate = new Date(run.start_time_ms);
+
+                return (
+                  <div key={run.start_time_ms} className="relative flex gap-4">
+                    {/* Circle indicator */}
+                    <div className="relative z-10 flex items-center justify-center w-8 h-8 rounded-full bg-card border-2 border-chart-3 shrink-0">
+                      <Circle className="w-3 h-3 text-chart-3 fill-chart-3" />
+                    </div>
+
+                    {/* Run details */}
+                    <div className="flex-1 px-4 py-3 rounded-lg border border-border bg-card">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-foreground">
+                            Run #{runNumber}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {startDate.toLocaleDateString()}{' '}
+                            {startDate.toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1 text-chart-2">
+                          <Sun className="w-4 h-4" />
+                          <span className="text-sm font-medium">
+                            {formatMs(run.total_awake_time_ms)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {appRuns && appRuns.length === 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-foreground mb-4">
+            Run History
+          </h2>
+          <div className="px-5 py-4 border border-border rounded bg-card flex items-center gap-3">
+            <Play className="w-5 h-5 text-muted-foreground shrink-0" />
+            <p className="text-muted-foreground text-sm">
+              No runs recorded for this application yet.
+            </p>
+          </div>
         </div>
       )}
     </PageContainer>
