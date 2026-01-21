@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RunRunIdRouteImport } from './routes/run.$runId'
 import { Route as AppHostRouteImport } from './routes/app.$host'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RunRunIdRoute = RunRunIdRouteImport.update({
+  id: '/run/$runId',
+  path: '/run/$runId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppHostRoute = AppHostRouteImport.update({
@@ -26,27 +32,31 @@ const AppHostRoute = AppHostRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app/$host': typeof AppHostRoute
+  '/run/$runId': typeof RunRunIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app/$host': typeof AppHostRoute
+  '/run/$runId': typeof RunRunIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/app/$host': typeof AppHostRoute
+  '/run/$runId': typeof RunRunIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app/$host'
+  fullPaths: '/' | '/app/$host' | '/run/$runId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app/$host'
-  id: '__root__' | '/' | '/app/$host'
+  to: '/' | '/app/$host' | '/run/$runId'
+  id: '__root__' | '/' | '/app/$host' | '/run/$runId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppHostRoute: typeof AppHostRoute
+  RunRunIdRoute: typeof RunRunIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/run/$runId': {
+      id: '/run/$runId'
+      path: '/run/$runId'
+      fullPath: '/run/$runId'
+      preLoaderRoute: typeof RunRunIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/$host': {
@@ -71,6 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppHostRoute: AppHostRoute,
+  RunRunIdRoute: RunRunIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

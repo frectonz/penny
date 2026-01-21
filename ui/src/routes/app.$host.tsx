@@ -196,14 +196,18 @@ function AppDetailPage() {
                 const startDate = new Date(run.start_time_ms);
 
                 return (
-                  <div key={run.start_time_ms} className="relative flex gap-4">
+                  <div key={run.run_id} className="relative flex gap-4">
                     {/* Circle indicator */}
                     <div className="relative z-10 flex items-center justify-center w-8 h-8 rounded-full bg-card border-2 border-chart-3 shrink-0">
                       <Circle className="w-3 h-3 text-chart-3 fill-chart-3" />
                     </div>
 
                     {/* Run details */}
-                    <div className="flex-1 px-4 py-3 rounded-lg border border-border bg-card">
+                    <Link
+                      to="/run/$runId"
+                      params={{ runId: run.run_id }}
+                      className="flex-1 px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent/10 transition-colors"
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-foreground">
@@ -221,7 +225,7 @@ function AppDetailPage() {
                           </span>
                         </div>
                       </div>
-                    </div>
+                    </Link>
                   </div>
                 );
               })}
