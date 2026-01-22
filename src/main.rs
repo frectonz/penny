@@ -1323,3 +1323,294 @@ fn main() -> color_eyre::Result<()> {
     info!(address = %address, "proxy server listening");
     server.run_forever()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn create_test_db() -> SqliteDatabase {
+        SqliteDatabase::new("sqlite::memory:")
+            .await
+            .expect("failed to create in-memory database")
+    }
+
+    mod collector_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn app_started_creates_run_record() {
+            let db = create_test_db().await;
+            let host = Host("test-app.local".to_string());
+
+            let run_id = db.app_started(&host).await;
+
+            // Verify via reporter that the run exists
+            let runs = db.app_runs(&host, None).await;
+            assert_eq!(runs.len(), 1);
+            assert_eq!(runs[0].run_id, run_id.0);
+        }
+
+        #[tokio::test]
+        async fn app_stopped_updates_run_record() {
+            let db = create_test_db().await;
+            let host = Host("test-app.local".to_string());
+
+            db.app_started(&host).await;
+            db.app_stopped(&host).await;
+
+            // Verify via reporter - a stopped run should have awake time > 0
+            let overview = db.app_overview(&host, None).await.unwrap();
+            assert_eq!(overview.total_runs, 1);
+        }
+
+        #[tokio::test]
+        async fn app_start_failed_sets_flag() {
+            let db = create_test_db().await;
+            let host = Host("test-app.local".to_string());
+
+            db.app_started(&host).await;
+            db.app_start_failed(&host).await;
+
+            let overview = db.app_overview(&host, None).await.unwrap();
+            assert_eq!(overview.total_start_failures, 1);
+        }
+
+        #[tokio::test]
+        async fn append_stdout_captured_in_logs() {
+            let db = create_test_db().await;
+            let host = Host("test-app.local".to_string());
+
+            let run_id = db.app_started(&host).await;
+            db.append_stdout(&run_id, "Hello from stdout".to_string())
+                .await;
+            db.append_stdout(&run_id, "Another line".to_string()).await;
+
+            let logs = db.run_logs(&run_id).await.unwrap();
+            assert_eq!(logs.stdout.len(), 2);
+            assert_eq!(logs.stdout[0].line, "Hello from stdout");
+            assert_eq!(logs.stdout[1].line, "Another line");
+        }
+
+        #[tokio::test]
+        async fn append_stderr_captured_in_logs() {
+            let db = create_test_db().await;
+            let host = Host("test-app.local".to_string());
+
+            let run_id = db.app_started(&host).await;
+            db.append_stderr(&run_id, "Error occurred".to_string())
+                .await;
+            db.append_stderr(&run_id, "Stack trace here".to_string())
+                .await;
+
+            let logs = db.run_logs(&run_id).await.unwrap();
+            assert_eq!(logs.stderr.len(), 2);
+            assert_eq!(logs.stderr[0].line, "Error occurred");
+            assert_eq!(logs.stderr[1].line, "Stack trace here");
+        }
+
+        #[tokio::test]
+        async fn multiple_hosts_tracked_separately() {
+            let db = create_test_db().await;
+            let host1 = Host("app1.local".to_string());
+            let host2 = Host("app2.local".to_string());
+
+            db.app_started(&host1).await;
+            db.app_started(&host2).await;
+            db.app_stopped(&host1).await;
+
+            let apps = db.apps_overview(None).await;
+            assert_eq!(apps.len(), 2);
+
+            let app1 = apps.iter().find(|a| a.host == "app1.local").unwrap();
+            let app2 = apps.iter().find(|a| a.host == "app2.local").unwrap();
+
+            assert_eq!(app1.total_runs, 1);
+            assert_eq!(app2.total_runs, 1);
+        }
+    }
+
+    mod reporter_tests {
+        use super::*;
+
+        #[tokio::test]
+        async fn total_overview_empty_database() {
+            let db = create_test_db().await;
+
+            let overview = db.total_overview(None).await;
+
+            assert_eq!(overview.total_runs, 0);
+            assert_eq!(overview.total_awake_time_ms, 0);
+            assert_eq!(overview.total_start_failures, 0);
+        }
+
+        #[tokio::test]
+        async fn total_overview_counts_runs_and_failures() {
+            let db = create_test_db().await;
+            let host1 = Host("app1.local".to_string());
+            let host2 = Host("app2.local".to_string());
+
+            db.app_started(&host1).await;
+            db.app_stopped(&host1).await;
+
+            db.app_started(&host2).await;
+            db.app_stopped(&host2).await;
+
+            db.app_started(&host1).await;
+            db.app_start_failed(&host1).await;
+
+            let overview = db.total_overview(None).await;
+
+            assert_eq!(overview.total_runs, 3);
+            assert_eq!(overview.total_start_failures, 1);
+        }
+
+        #[tokio::test]
+        async fn apps_overview_groups_by_host() {
+            let db = create_test_db().await;
+            let host1 = Host("app1.local".to_string());
+            let host2 = Host("app2.local".to_string());
+
+            db.app_started(&host1).await;
+            db.app_stopped(&host1).await;
+            db.app_started(&host1).await;
+            db.app_stopped(&host1).await;
+
+            db.app_started(&host2).await;
+            db.app_stopped(&host2).await;
+
+            let overview = db.apps_overview(None).await;
+
+            assert_eq!(overview.len(), 2);
+
+            let app1 = overview.iter().find(|a| a.host == "app1.local").unwrap();
+            assert_eq!(app1.total_runs, 2);
+
+            let app2 = overview.iter().find(|a| a.host == "app2.local").unwrap();
+            assert_eq!(app2.total_runs, 1);
+        }
+
+        #[tokio::test]
+        async fn app_overview_returns_none_for_unknown_host() {
+            let db = create_test_db().await;
+
+            let overview = db
+                .app_overview(&Host("unknown.local".to_string()), None)
+                .await;
+
+            assert!(overview.is_none());
+        }
+
+        #[tokio::test]
+        async fn app_overview_returns_stats_for_host() {
+            let db = create_test_db().await;
+            let host = Host("myapp.local".to_string());
+            let other = Host("other.local".to_string());
+
+            db.app_started(&host).await;
+            db.app_stopped(&host).await;
+
+            db.app_started(&host).await;
+            db.app_start_failed(&host).await;
+
+            db.app_started(&other).await;
+            db.app_stopped(&other).await;
+
+            let overview = db.app_overview(&host, None).await;
+
+            assert!(overview.is_some());
+            let overview = overview.unwrap();
+            assert_eq!(overview.host, "myapp.local");
+            assert_eq!(overview.total_runs, 2);
+            assert_eq!(overview.total_start_failures, 1);
+        }
+
+        #[tokio::test]
+        async fn app_runs_returns_runs_for_host() {
+            let db = create_test_db().await;
+            let host = Host("myapp.local".to_string());
+
+            let run_id1 = db.app_started(&host).await;
+            db.app_stopped(&host).await;
+
+            let run_id2 = db.app_started(&host).await;
+            db.app_stopped(&host).await;
+
+            let run_id3 = db.app_started(&host).await;
+            db.app_stopped(&host).await;
+
+            let runs = db.app_runs(&host, None).await;
+
+            assert_eq!(runs.len(), 3);
+
+            // Verify all run IDs are present
+            let run_ids: Vec<&str> = runs.iter().map(|r| r.run_id.as_str()).collect();
+            assert!(run_ids.contains(&run_id1.0.as_str()));
+            assert!(run_ids.contains(&run_id2.0.as_str()));
+            assert!(run_ids.contains(&run_id3.0.as_str()));
+        }
+
+        #[tokio::test]
+        async fn app_runs_filters_by_host() {
+            let db = create_test_db().await;
+            let host1 = Host("app1.local".to_string());
+            let host2 = Host("app2.local".to_string());
+
+            db.app_started(&host1).await;
+            db.app_stopped(&host1).await;
+
+            db.app_started(&host2).await;
+            db.app_stopped(&host2).await;
+
+            let runs = db.app_runs(&host1, None).await;
+
+            assert_eq!(runs.len(), 1);
+        }
+
+        #[tokio::test]
+        async fn run_logs_returns_none_for_unknown_run() {
+            let db = create_test_db().await;
+
+            let logs = db
+                .run_logs(&RunId::from_string("nonexistent".to_string()))
+                .await;
+
+            assert!(logs.is_none());
+        }
+
+        #[tokio::test]
+        async fn run_logs_returns_stdout_and_stderr() {
+            let db = create_test_db().await;
+            let host = Host("test.local".to_string());
+
+            let run_id = db.app_started(&host).await;
+            db.append_stdout(&run_id, "stdout line 1".to_string()).await;
+            db.append_stdout(&run_id, "stdout line 2".to_string()).await;
+            db.append_stderr(&run_id, "stderr line 1".to_string()).await;
+
+            let logs = db.run_logs(&run_id).await;
+
+            assert!(logs.is_some());
+            let logs = logs.unwrap();
+            assert_eq!(logs.stdout.len(), 2);
+            assert_eq!(logs.stderr.len(), 1);
+            assert_eq!(logs.stdout[0].line, "stdout line 1");
+            assert_eq!(logs.stdout[1].line, "stdout line 2");
+            assert_eq!(logs.stderr[0].line, "stderr line 1");
+        }
+
+        #[tokio::test]
+        async fn run_logs_returns_empty_logs_for_run_without_output() {
+            let db = create_test_db().await;
+            let host = Host("test.local".to_string());
+
+            let run_id = db.app_started(&host).await;
+
+            let logs = db.run_logs(&run_id).await;
+
+            assert!(logs.is_some());
+            let logs = logs.unwrap();
+            assert!(logs.stdout.is_empty());
+            assert!(logs.stderr.is_empty());
+        }
+    }
+}
