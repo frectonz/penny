@@ -1,4 +1,5 @@
 mod api;
+mod auth;
 mod collector;
 mod config;
 mod db;
@@ -31,6 +32,10 @@ enum Command {
         /// The address to bind to.
         #[arg(short, long, default_value = "127.0.0.1:3030")]
         address: String,
+
+        /// Password for dashboard access (can also use PENNY_PASSWORD env var)
+        #[arg(long, env = "PENNY_PASSWORD")]
+        password: Option<String>,
     },
 }
 
@@ -44,10 +49,21 @@ fn main() -> color_eyre::Result<()> {
         .init();
 
     let Args {
-        command: Command::Serve { config, address },
+        command:
+            Command::Serve {
+                config,
+                address,
+                password,
+            },
     } = Args::parse();
 
-    info!(config = %config, address = %address, "starting penny proxy");
+    auth::init_password(password.clone());
+    info!(
+        config = %config,
+        address = %address,
+        auth_enabled = password.is_some(),
+        "starting penny proxy"
+    );
 
     let mut server = pingora::server::Server::new(None).unwrap();
     server.bootstrap();

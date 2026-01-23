@@ -1,6 +1,7 @@
 import { createFetch, createSchema } from '@better-fetch/fetch';
 import { z } from 'zod';
 import { env } from '../env';
+import { getStoredAuth } from './auth';
 
 const timeRangeQuery = z.object({
   start: z.number().optional(),
@@ -51,8 +52,15 @@ const runLogsSchema = z.object({
   stderr: z.array(logEntrySchema),
 });
 
+const authStatusSchema = z.object({
+  auth_required: z.boolean(),
+});
+
 export const schema = createSchema(
   {
+    '/api/auth/status': {
+      output: authStatusSchema,
+    },
     '/api/version': {
       output: z.object({ version: z.string() }),
     },
@@ -95,6 +103,10 @@ export const $fetch = createFetch({
   baseURL: env.VITE_API_URL ?? '',
   schema,
   throw: true,
+  auth: {
+    type: 'Bearer',
+    token: () => getStoredAuth() ?? undefined,
+  },
 });
 
 export type TimeRange = z.infer<typeof timeRangeQuery>;
@@ -104,3 +116,4 @@ export type AppRun = z.infer<typeof appRunSchema>;
 export type PaginatedAppRuns = z.infer<typeof paginatedAppRunsSchema>;
 export type LogEntry = z.infer<typeof logEntrySchema>;
 export type RunLogs = z.infer<typeof runLogsSchema>;
+export type AuthStatus = z.infer<typeof authStatusSchema>;

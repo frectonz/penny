@@ -1,8 +1,11 @@
 use axum::extract::{Query, State};
+use axum::middleware;
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::Serialize;
 use tower_http::cors::{Any, CorsLayer};
+
+use crate::auth::{auth_middleware, auth_status_handler};
 
 use crate::reporter::{
     AppOverview, AppRun, PaginatedResponse, PaginationParams, Reporter, TimeRange, TotalOverview,
@@ -141,14 +144,23 @@ pub fn create_api_router<R: Reporter>(reporter: R) -> Router {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    Router::new()
+    // Public routes (no auth required)
+    let public_routes = Router::new().route("/api/auth/status", get(auth_status_handler));
+
+    // Protected routes (auth middleware applied)
+    let protected_routes = Router::new()
         .route("/api/version", get(version_handler))
         .route("/api/total-overview", get(total_overview_handler::<R>))
         .route("/api/apps-overview", get(apps_overview_handler::<R>))
         .route("/api/app-overview/{host}", get(app_overview_handler::<R>))
         .route("/api/app-runs/{host}", get(app_runs_handler::<R>))
         .route("/api/run-logs/{run_id}", get(run_logs_handler::<R>))
+        .layer(middleware::from_fn(auth_middleware))
+        .with_state(reporter);
+
+    Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
         .fallback(static_handler)
         .layer(cors)
-        .with_state(reporter)
 }

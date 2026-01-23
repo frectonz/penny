@@ -1822,6 +1822,7 @@ version = "0.0.10"
 dependencies = [
  "async-trait",
  "axum",
+ "base64",
  "clap 4.5.53",
  "color-eyre",
  "http",

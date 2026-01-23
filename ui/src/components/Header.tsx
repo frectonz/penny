@@ -1,9 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
+import { LogOut } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/AuthContext';
 import { $fetch } from '@/lib/api';
 
 export default function Header() {
+  const { isAuthRequired, logout } = useAuth();
   const { data, isLoading } = useQuery({
     queryKey: ['version'],
     queryFn: () => $fetch('/api/version'),
@@ -78,6 +82,17 @@ export default function Header() {
         ) : data ? (
           <span className="text-md text-muted-foreground">v{data.version}</span>
         ) : null}
+        {isAuthRequired && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={logout}
+            title="Logout"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <LogOut size={18} />
+          </Button>
+        )}
       </nav>
     </header>
   );
