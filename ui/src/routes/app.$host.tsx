@@ -10,6 +10,7 @@ import {
   Play,
   Server,
   Sun,
+  Timer,
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { ErrorBanner } from '@/components/ErrorBanner';
@@ -136,7 +137,8 @@ function AppDetailPage() {
 
       {/* Loading State */}
       {isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
@@ -157,13 +159,26 @@ function AppDetailPage() {
 
       {/* Stats Grid */}
       {appOverview && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
             title="Total Runs"
             value={appOverview.total_runs}
             icon={Play}
             iconColor="text-accent"
             valueClassName="text-accent"
+          />
+          <StatCard
+            title="Avg Duration"
+            value={formatMs(
+              appOverview.total_runs > 0
+                ? Math.round(
+                    appOverview.total_awake_time_ms / appOverview.total_runs,
+                  )
+                : 0,
+            )}
+            icon={Timer}
+            iconColor="text-chart-1"
+            valueClassName="text-chart-1"
           />
           <StatCard
             title="Awake Time"
