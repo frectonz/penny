@@ -116,9 +116,19 @@ function AppDetailPage() {
               <Server className="w-5 h-5 text-chart-3" />
             </div>
             <div>
-              <span className="text-xs uppercase tracking-widest text-muted-foreground block">
-                Application
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-widest text-muted-foreground">
+                  Application
+                </span>
+                {appOverview?.is_running && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-chart-2/10 text-chart-2">
+                    <Circle className="w-2 h-2 fill-current animate-pulse" />
+                    <span className="text-[10px] uppercase tracking-widest font-medium">
+                      Running
+                    </span>
+                  </span>
+                )}
+              </div>
               <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 {host}
               </h1>

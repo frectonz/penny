@@ -22,6 +22,7 @@ const appOverviewSchema = z.object({
   total_sleep_time_ms: z.number(),
   total_start_failures: z.number(),
   total_stop_failures: z.number(),
+  is_running: z.boolean(),
 });
 
 const appRunSchema = z.object({
