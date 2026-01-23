@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
   ArrowLeft,
   Circle,
+  Clock,
   Loader,
   Moon,
   Percent,
@@ -29,6 +30,21 @@ function formatFailureRate(failures: number, total: number): string {
   if (rate === 0) return '0%';
   if (rate < 1) return '<1%';
   return `${Math.round(rate)}%`;
+}
+
+function formatRelativeTime(timestampMs: number): string {
+  const now = Date.now();
+  const diffMs = now - timestampMs;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(timestampMs).toLocaleDateString();
 }
 
 export const Route = createFileRoute('/app/$host')({
@@ -139,6 +155,14 @@ function AppDetailPage() {
               <h1 className="text-2xl font-bold tracking-tight text-foreground">
                 {host}
               </h1>
+              {appOverview?.last_run_at && (
+                <div className="flex items-center gap-1 mt-1 text-muted-foreground">
+                  <Clock className="w-3 h-3" />
+                  <span className="text-xs">
+                    Last active {formatRelativeTime(appOverview.last_run_at)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -43,6 +43,7 @@ pub struct AppOverview {
     pub total_start_failures: i64,
     pub total_stop_failures: i64,
     pub is_running: bool,
+    pub last_run_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -189,13 +190,14 @@ impl Reporter for SqliteDatabase {
                     + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep_per_host WHERE host = o.host), 0) as total_sleep_time_ms,
                 COALESCE(SUM(o.start_failed), 0) as total_start_failures,
                 COALESCE(SUM(o.stop_failed), 0) as total_stop_failures,
-                COALESCE((SELECT has_running FROM latest_per_host WHERE host = o.host), 0) as is_running
+                COALESCE((SELECT has_running FROM latest_per_host WHERE host = o.host), 0) as is_running,
+                MAX(o.started_at) as last_run_at
             FROM ordered_runs o
             GROUP BY o.host
             ORDER BY o.host
         "#;
 
-        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64, i64)>(query)
+        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64, i64, i64)>(query)
             .bind(time_range.start)
             .bind(time_range.end)
             .fetch_all(&self.pool)
@@ -213,6 +215,7 @@ impl Reporter for SqliteDatabase {
                         total_start_failures,
                         total_stop_failures,
                         is_running,
+                        last_run_at,
                     )| AppOverview {
                         host,
                         total_runs,
@@ -221,6 +224,7 @@ impl Reporter for SqliteDatabase {
                         total_start_failures,
                         total_stop_failures,
                         is_running: is_running != 0,
+                        last_run_at: Some(last_run_at),
                     },
                 )
                 .collect(),
@@ -275,11 +279,12 @@ impl Reporter for SqliteDatabase {
                     + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep), 0) as total_sleep_time_ms,
                 COALESCE(SUM(start_failed), 0) as total_start_failures,
                 COALESCE(SUM(stop_failed), 0) as total_stop_failures,
-                COALESCE((SELECT has_running FROM latest_info), 0) as is_running
+                COALESCE((SELECT has_running FROM latest_info), 0) as is_running,
+                MAX(started_at) as last_run_at
             FROM ordered_runs
         "#;
 
-        let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64)>(query)
+        let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64)>(query)
             .bind(&host.0)
             .bind(time_range.start)
             .bind(time_range.end)
@@ -294,6 +299,7 @@ impl Reporter for SqliteDatabase {
                 total_start_failures,
                 total_stop_failures,
                 is_running,
+                last_run_at,
             ))) => {
                 if total_runs == 0 {
                     return None;
@@ -306,6 +312,7 @@ impl Reporter for SqliteDatabase {
                     total_start_failures,
                     total_stop_failures,
                     is_running: is_running != 0,
+                    last_run_at: Some(last_run_at),
                 })
             }
             Ok(None) => None,
