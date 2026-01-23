@@ -1,14 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
   AlertTriangle,
   ArrowLeft,
   Circle,
+  Loader,
   Moon,
   Play,
   Server,
   Sun,
 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { PageContainer } from '@/components/PageContainer';
 import { StatCard, StatCardSkeleton } from '@/components/StatCard';
@@ -56,14 +58,44 @@ function AppDetailPage() {
       }),
   });
 
-  const { data: appRuns, isLoading: isLoadingRuns } = useQuery({
+  const {
+    data: appRunsData,
+    isLoading: isLoadingRuns,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['app-runs', host, start, end],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       $fetch('/api/app-runs/:host', {
         params: { host },
-        query: { start, end },
+        query: { start, end, cursor: pageParam, limit: 20 },
       }),
+    initialPageParam: undefined as number | undefined,
+    getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
   });
+
+  const appRuns = appRunsData?.pages.flatMap((page) => page.items) ?? [];
+
+  // Intersection observer for infinite scroll
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 },
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <PageContainer>
@@ -180,7 +212,7 @@ function AppDetailPage() {
         </div>
       )}
 
-      {appRuns && appRuns.length > 0 && (
+      {appRuns.length > 0 && (
         <div className="mt-8">
           <h2 className="text-lg font-semibold text-foreground mb-4">
             Run History
@@ -230,11 +262,24 @@ function AppDetailPage() {
                 );
               })}
             </div>
+
+            {/* Infinite scroll trigger */}
+            <div ref={loadMoreRef} className="h-4" />
+
+            {/* Loading more indicator */}
+            {isFetchingNextPage && (
+              <div className="flex items-center justify-center py-4">
+                <Loader className="w-5 h-5 text-muted-foreground animate-spin" />
+                <span className="ml-2 text-sm text-muted-foreground">
+                  Loading more...
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {appRuns && appRuns.length === 0 && (
+      {!isLoadingRuns && appRuns.length === 0 && (
         <div className="mt-8">
           <h2 className="text-lg font-semibold text-foreground mb-4">
             Run History

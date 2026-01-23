@@ -133,9 +133,11 @@ mod tests {
         let run_id = db.app_started(&host).await;
 
         // Verify via reporter that the run exists
-        let runs = db.app_runs(&host, None).await;
-        assert_eq!(runs.len(), 1);
-        assert_eq!(runs[0].run_id, run_id.0);
+        let response = db
+            .app_runs(&host, None, crate::reporter::PaginationParams::default())
+            .await;
+        assert_eq!(response.items.len(), 1);
+        assert_eq!(response.items[0].run_id, run_id.0);
     }
 
     #[tokio::test]

@@ -29,6 +29,12 @@ const appRunSchema = z.object({
   total_awake_time_ms: z.number(),
 });
 
+const paginatedAppRunsSchema = z.object({
+  items: z.array(appRunSchema),
+  next_cursor: z.number().nullable(),
+  has_more: z.boolean(),
+});
+
 const logEntrySchema = z.object({
   line: z.string(),
   timestamp: z.number(),
@@ -63,8 +69,11 @@ export const schema = createSchema(
       params: z.object({
         host: z.string(),
       }),
-      query: timeRangeQuery,
-      output: z.array(appRunSchema),
+      query: timeRangeQuery.extend({
+        cursor: z.number().optional(),
+        limit: z.number().optional(),
+      }),
+      output: paginatedAppRunsSchema,
     },
     '/api/run-logs/:run_id': {
       params: z.object({
@@ -86,5 +95,6 @@ export type TimeRange = z.infer<typeof timeRangeQuery>;
 export type TotalOverview = z.infer<typeof totalOverviewSchema>;
 export type AppOverview = z.infer<typeof appOverviewSchema>;
 export type AppRun = z.infer<typeof appRunSchema>;
+export type PaginatedAppRuns = z.infer<typeof paginatedAppRunsSchema>;
 export type LogEntry = z.infer<typeof logEntrySchema>;
 export type RunLogs = z.infer<typeof runLogsSchema>;

@@ -12,6 +12,18 @@ pub struct TimeRange {
     pub end: Option<i64>,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PaginationParams {
+    pub cursor: Option<i64>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PaginatedResponse<T> {
+    pub items: Vec<T>,
+    pub next_cursor: Option<i64>,
+    pub has_more: bool,
+}
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct TotalOverview {
@@ -57,9 +69,14 @@ pub trait Reporter: Sync + Send + Clone + Debug + 'static {
     async fn apps_overview(&self, time_range: Option<TimeRange>) -> Vec<AppOverview>;
 
     async fn app_overview(&self, host: &Host, time_range: Option<TimeRange>)
-        -> Option<AppOverview>;
+    -> Option<AppOverview>;
 
-    async fn app_runs(&self, host: &Host, time_range: Option<TimeRange>) -> Vec<AppRun>;
+    async fn app_runs(
+        &self,
+        host: &Host,
+        time_range: Option<TimeRange>,
+        pagination: PaginationParams,
+    ) -> PaginatedResponse<AppRun>;
 
     async fn run_logs(&self, run_id: &RunId) -> Option<RunLogs>;
 }
@@ -275,8 +292,15 @@ impl Reporter for SqliteDatabase {
         }
     }
 
-    async fn app_runs(&self, host: &Host, time_range: Option<TimeRange>) -> Vec<AppRun> {
+    async fn app_runs(
+        &self,
+        host: &Host,
+        time_range: Option<TimeRange>,
+        pagination: PaginationParams,
+    ) -> PaginatedResponse<AppRun> {
         let time_range = time_range.unwrap_or_default();
+        let limit = pagination.limit.unwrap_or(20).min(100) as i64;
+        let fetch_limit = limit + 1; // Fetch one extra to detect if more pages exist
 
         let query = r#"
             SELECT
@@ -291,31 +315,58 @@ impl Reporter for SqliteDatabase {
             WHERE host = $1
               AND ($2 IS NULL OR started_at >= $2)
               AND ($3 IS NULL OR started_at <= $3)
+              AND ($4 IS NULL OR started_at < $4)
             ORDER BY started_at DESC
+            LIMIT $5
         "#;
 
         let rows = sqlx::query_as::<_, (String, i64, i64, i64)>(query)
             .bind(&host.0)
             .bind(time_range.start)
             .bind(time_range.end)
+            .bind(pagination.cursor)
+            .bind(fetch_limit)
             .fetch_all(&self.pool)
             .await;
 
         match rows {
-            Ok(rows) => rows
-                .into_iter()
-                .map(
-                    |(run_id, start_time_ms, end_time_ms, total_awake_time_ms)| AppRun {
-                        run_id,
-                        start_time_ms,
-                        end_time_ms,
-                        total_awake_time_ms,
-                    },
-                )
-                .collect(),
+            Ok(mut rows) => {
+                let has_more = rows.len() as i64 > limit;
+                if has_more {
+                    rows.pop(); // Remove the extra item used for detection
+                }
+
+                let next_cursor = if has_more {
+                    rows.last().map(|(_, start_time_ms, _, _)| *start_time_ms)
+                } else {
+                    None
+                };
+
+                let items = rows
+                    .into_iter()
+                    .map(
+                        |(run_id, start_time_ms, end_time_ms, total_awake_time_ms)| AppRun {
+                            run_id,
+                            start_time_ms,
+                            end_time_ms,
+                            total_awake_time_ms,
+                        },
+                    )
+                    .collect();
+
+                PaginatedResponse {
+                    items,
+                    next_cursor,
+                    has_more,
+                }
+            }
             Err(e) => {
-                error!("failed to query app runs: {e}");
-                Vec::new()
+                error!("failed to query paginated app runs: {e}");
+                PaginatedResponse {
+                    items: Vec::new(),
+                    next_cursor: None,
+                    has_more: false,
+                }
             }
         }
     }
@@ -497,12 +548,12 @@ mod tests {
         let run_id3 = db.app_started(&host).await;
         db.app_stopped(&host).await;
 
-        let runs = db.app_runs(&host, None).await;
+        let response = db.app_runs(&host, None, PaginationParams::default()).await;
 
-        assert_eq!(runs.len(), 3);
+        assert_eq!(response.items.len(), 3);
 
         // Verify all run IDs are present
-        let run_ids: Vec<&str> = runs.iter().map(|r| r.run_id.as_str()).collect();
+        let run_ids: Vec<&str> = response.items.iter().map(|r| r.run_id.as_str()).collect();
         assert!(run_ids.contains(&run_id1.0.as_str()));
         assert!(run_ids.contains(&run_id2.0.as_str()));
         assert!(run_ids.contains(&run_id3.0.as_str()));
@@ -520,9 +571,9 @@ mod tests {
         db.app_started(&host2).await;
         db.app_stopped(&host2).await;
 
-        let runs = db.app_runs(&host1, None).await;
+        let response = db.app_runs(&host1, None, PaginationParams::default()).await;
 
-        assert_eq!(runs.len(), 1);
+        assert_eq!(response.items.len(), 1);
     }
 
     #[tokio::test]
@@ -570,5 +621,77 @@ mod tests {
         let logs = logs.unwrap();
         assert!(logs.stdout.is_empty());
         assert!(logs.stderr.is_empty());
+    }
+
+    #[tokio::test]
+    async fn app_runs_returns_limited_results() {
+        let db = create_test_db().await;
+        let host = Host("myapp.local".to_string());
+
+        // Create 5 runs
+        for _ in 0..5 {
+            db.app_started(&host).await;
+            db.app_stopped(&host).await;
+        }
+
+        let pagination = PaginationParams {
+            cursor: None,
+            limit: Some(3),
+        };
+        let response = db.app_runs(&host, None, pagination).await;
+
+        assert_eq!(response.items.len(), 3);
+        assert!(response.has_more);
+        assert!(response.next_cursor.is_some());
+    }
+
+    #[tokio::test]
+    async fn app_runs_cursor_returns_next_page() {
+        let db = create_test_db().await;
+        let host = Host("myapp.local".to_string());
+
+        // Create 5 runs
+        for _ in 0..5 {
+            db.app_started(&host).await;
+            db.app_stopped(&host).await;
+        }
+
+        // Get first page
+        let pagination = PaginationParams {
+            cursor: None,
+            limit: Some(3),
+        };
+        let first_page = db.app_runs(&host, None, pagination).await;
+        assert_eq!(first_page.items.len(), 3);
+        assert!(first_page.has_more);
+
+        // Get second page using cursor
+        let pagination = PaginationParams {
+            cursor: first_page.next_cursor,
+            limit: Some(3),
+        };
+        let second_page = db.app_runs(&host, None, pagination).await;
+        assert_eq!(second_page.items.len(), 2);
+        assert!(!second_page.has_more);
+        assert!(second_page.next_cursor.is_none());
+
+        // Ensure no overlap between pages
+        let first_ids: Vec<&str> = first_page.items.iter().map(|r| r.run_id.as_str()).collect();
+        for run in &second_page.items {
+            assert!(!first_ids.contains(&run.run_id.as_str()));
+        }
+    }
+
+    #[tokio::test]
+    async fn app_runs_empty_result() {
+        let db = create_test_db().await;
+        let host = Host("unknown.local".to_string());
+
+        let pagination = PaginationParams::default();
+        let response = db.app_runs(&host, None, pagination).await;
+
+        assert!(response.items.is_empty());
+        assert!(!response.has_more);
+        assert!(response.next_cursor.is_none());
     }
 }

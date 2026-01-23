@@ -4,7 +4,9 @@ use axum::{Json, Router};
 use serde::Serialize;
 use tower_http::cors::{Any, CorsLayer};
 
-use crate::reporter::{AppOverview, AppRun, Reporter, TimeRange, TotalOverview};
+use crate::reporter::{
+    AppOverview, AppRun, PaginatedResponse, PaginationParams, Reporter, TimeRange, TotalOverview,
+};
 use crate::types::{Host, RunId};
 
 #[derive(rust_embed::RustEmbed)]
@@ -91,18 +93,34 @@ async fn app_overview_handler<R: Reporter>(
     }
 }
 
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+struct AppRunsQuery {
+    start: Option<i64>,
+    end: Option<i64>,
+    cursor: Option<i64>,
+    limit: Option<u32>,
+}
+
 async fn app_runs_handler<R: Reporter>(
     State(reporter): State<R>,
     axum::extract::Path(host): axum::extract::Path<String>,
-    Query(time_range): Query<TimeRange>,
-) -> Json<Vec<AppRun>> {
-    let time_range = if time_range.start.is_some() || time_range.end.is_some() {
-        Some(time_range)
+    Query(query): Query<AppRunsQuery>,
+) -> Json<PaginatedResponse<AppRun>> {
+    let time_range = if query.start.is_some() || query.end.is_some() {
+        Some(TimeRange {
+            start: query.start,
+            end: query.end,
+        })
     } else {
         None
     };
 
-    Json(reporter.app_runs(&Host(host), time_range).await)
+    let pagination = PaginationParams {
+        cursor: query.cursor,
+        limit: query.limit,
+    };
+
+    Json(reporter.app_runs(&Host(host), time_range, pagination).await)
 }
 
 async fn run_logs_handler<R: Reporter>(
