@@ -4,12 +4,14 @@ import {
   ArrowLeft,
   Circle,
   Clock,
+  FileText,
   Loader,
   Moon,
   Percent,
   Play,
   Server,
   Sun,
+  Terminal,
   Timer,
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
@@ -179,11 +181,9 @@ function AppDetailPage() {
       {/* Loading State */}
       {isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-          <StatCardSkeleton />
-          <StatCardSkeleton />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <StatCardSkeleton key={i} />
+          ))}
         </div>
       )}
 
@@ -315,11 +315,31 @@ function AppDetailPage() {
                             {startDate.toLocaleTimeString()}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1 text-chart-2">
-                          <Sun className="w-4 h-4" />
-                          <span className="text-sm font-medium">
-                            {formatMs(run.total_awake_time_ms)}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          {/* Log line counts */}
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-chart-1/10 text-chart-1 text-xs">
+                              <Terminal className="w-3 h-3" />
+                              {run.stdout_lines}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${
+                                run.stderr_lines > 0
+                                  ? 'bg-destructive/10 text-destructive'
+                                  : 'bg-muted text-muted-foreground'
+                              }`}
+                            >
+                              <FileText className="w-3 h-3" />
+                              {run.stderr_lines}
+                            </span>
+                          </div>
+                          {/* Awake time */}
+                          <div className="flex items-center gap-1 text-chart-2">
+                            <Sun className="w-4 h-4" />
+                            <span className="text-sm font-medium">
+                              {formatMs(run.total_awake_time_ms)}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </Link>

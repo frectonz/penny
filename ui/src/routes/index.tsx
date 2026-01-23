@@ -198,34 +198,15 @@ function AppCardSkeleton() {
 
       {/* Stats grid skeleton */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="flex items-center gap-3">
-          <Skeleton className="w-8 h-8 rounded shrink-0" />
-          <div>
-            <Skeleton className="h-3 w-12 mb-1" />
-            <Skeleton className="h-5 w-14" />
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex items-center gap-3">
+            <Skeleton className="w-8 h-8 rounded shrink-0" />
+            <div>
+              <Skeleton className="h-3 w-12 mb-1" />
+              <Skeleton className="h-5 w-14" />
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Skeleton className="w-8 h-8 rounded shrink-0" />
-          <div>
-            <Skeleton className="h-3 w-12 mb-1" />
-            <Skeleton className="h-5 w-14" />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Skeleton className="w-8 h-8 rounded shrink-0" />
-          <div>
-            <Skeleton className="h-3 w-12 mb-1" />
-            <Skeleton className="h-5 w-14" />
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <Skeleton className="w-8 h-8 rounded shrink-0" />
-          <div>
-            <Skeleton className="h-3 w-12 mb-1" />
-            <Skeleton className="h-5 w-14" />
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );

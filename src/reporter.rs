@@ -52,6 +52,8 @@ pub struct AppRun {
     pub start_time_ms: i64,
     pub end_time_ms: i64,
     pub total_awake_time_ms: i64,
+    pub stdout_lines: i64,
+    pub stderr_lines: i64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -155,6 +157,7 @@ impl Reporter for SqliteDatabase {
             WITH ordered_runs AS (
                 SELECT
                     host,
+                    run_id,
                     started_at,
                     stopped_at,
                     start_failed,
@@ -246,6 +249,7 @@ impl Reporter for SqliteDatabase {
             WITH ordered_runs AS (
                 SELECT
                     host,
+                    run_id,
                     started_at,
                     stopped_at,
                     start_failed,
@@ -335,23 +339,25 @@ impl Reporter for SqliteDatabase {
 
         let query = r#"
             SELECT
-                run_id,
-                started_at,
-                COALESCE(stopped_at, CAST(strftime('%s', 'now') * 1000 AS INTEGER)) as end_time,
+                r.run_id,
+                r.started_at,
+                COALESCE(r.stopped_at, CAST(strftime('%s', 'now') * 1000 AS INTEGER)) as end_time,
                 CASE
-                    WHEN stopped_at IS NOT NULL THEN stopped_at - started_at
-                    ELSE CAST(strftime('%s', 'now') * 1000 AS INTEGER) - started_at
-                END as awake_time
-            FROM runs
-            WHERE host = $1
-              AND ($2 IS NULL OR started_at >= $2)
-              AND ($3 IS NULL OR started_at <= $3)
-              AND ($4 IS NULL OR started_at < $4)
-            ORDER BY started_at DESC
+                    WHEN r.stopped_at IS NOT NULL THEN r.stopped_at - r.started_at
+                    ELSE CAST(strftime('%s', 'now') * 1000 AS INTEGER) - r.started_at
+                END as awake_time,
+                (SELECT COUNT(*) FROM stdout WHERE run_id = r.run_id) as stdout_lines,
+                (SELECT COUNT(*) FROM stderr WHERE run_id = r.run_id) as stderr_lines
+            FROM runs r
+            WHERE r.host = $1
+              AND ($2 IS NULL OR r.started_at >= $2)
+              AND ($3 IS NULL OR r.started_at <= $3)
+              AND ($4 IS NULL OR r.started_at < $4)
+            ORDER BY r.started_at DESC
             LIMIT $5
         "#;
 
-        let rows = sqlx::query_as::<_, (String, i64, i64, i64)>(query)
+        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64)>(query)
             .bind(&host.0)
             .bind(time_range.start)
             .bind(time_range.end)
@@ -368,7 +374,8 @@ impl Reporter for SqliteDatabase {
                 }
 
                 let next_cursor = if has_more {
-                    rows.last().map(|(_, start_time_ms, _, _)| *start_time_ms)
+                    rows.last()
+                        .map(|(_, start_time_ms, _, _, _, _)| *start_time_ms)
                 } else {
                     None
                 };
@@ -376,11 +383,20 @@ impl Reporter for SqliteDatabase {
                 let items = rows
                     .into_iter()
                     .map(
-                        |(run_id, start_time_ms, end_time_ms, total_awake_time_ms)| AppRun {
+                        |(
                             run_id,
                             start_time_ms,
                             end_time_ms,
                             total_awake_time_ms,
+                            stdout_lines,
+                            stderr_lines,
+                        )| AppRun {
+                            run_id,
+                            start_time_ms,
+                            end_time_ms,
+                            total_awake_time_ms,
+                            stdout_lines,
+                            stderr_lines,
                         },
                     )
                     .collect();
@@ -681,10 +697,11 @@ mod tests {
         let db = create_test_db().await;
         let host = Host("myapp.local".to_string());
 
-        // Create 5 runs
+        // Create 5 runs with small delays to ensure unique timestamps for cursor pagination
         for _ in 0..5 {
             db.app_started(&host).await;
             db.app_stopped(&host).await;
+            tokio::time::sleep(std::time::Duration::from_millis(2)).await;
         }
 
         // Get first page

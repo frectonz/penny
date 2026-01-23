@@ -31,6 +31,8 @@ const appRunSchema = z.object({
   start_time_ms: z.number(),
   end_time_ms: z.number(),
   total_awake_time_ms: z.number(),
+  stdout_lines: z.number(),
+  stderr_lines: z.number(),
 });
 
 const paginatedAppRunsSchema = z.object({
