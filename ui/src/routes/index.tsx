@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Layers,
   Moon,
+  OctagonX,
   Play,
   Server,
   Sun,
@@ -72,37 +73,6 @@ function AppCard({
           </div>
         </div>
 
-        {/* Failures */}
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${
-              app.total_start_failures > 0 ? 'bg-destructive/10' : 'bg-muted'
-            }`}
-          >
-            <AlertTriangle
-              className={`w-4 h-4 ${
-                app.total_start_failures > 0
-                  ? 'text-destructive'
-                  : 'text-muted-foreground'
-              }`}
-            />
-          </div>
-          <div>
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground block">
-              Failures
-            </span>
-            <p
-              className={`text-lg font-semibold tabular-nums ${
-                app.total_start_failures > 0
-                  ? 'text-destructive'
-                  : 'text-muted-foreground'
-              }`}
-            >
-              {app.total_start_failures}
-            </p>
-          </div>
-        </div>
-
         {/* Awake Time */}
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded bg-chart-2/10 flex items-center justify-center shrink-0">
@@ -129,6 +99,39 @@ function AppCard({
             </span>
             <p className="text-lg font-semibold text-chart-4 tabular-nums">
               {formatMs(app.total_sleep_time_ms)}
+            </p>
+          </div>
+        </div>
+
+        {/* Failures */}
+        <div className="flex items-center gap-3">
+          <div
+            className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${
+              app.total_start_failures + app.total_stop_failures > 0
+                ? 'bg-destructive/10'
+                : 'bg-muted'
+            }`}
+          >
+            <AlertTriangle
+              className={`w-4 h-4 ${
+                app.total_start_failures + app.total_stop_failures > 0
+                  ? 'text-destructive'
+                  : 'text-muted-foreground'
+              }`}
+            />
+          </div>
+          <div>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground block">
+              Failures
+            </span>
+            <p
+              className={`text-lg font-semibold tabular-nums ${
+                app.total_start_failures + app.total_stop_failures > 0
+                  ? 'text-destructive'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              {app.total_start_failures}/{app.total_stop_failures}
             </p>
           </div>
         </div>
@@ -245,9 +248,10 @@ function App() {
       {error && <ErrorBanner message={`Error: ${error.message}`} />}
 
       {/* Stats Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {isTotalLoading ? (
           <>
+            <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
@@ -287,6 +291,21 @@ function App() {
               }
               valueClassName={
                 totalOverview.total_start_failures > 0
+                  ? 'text-destructive'
+                  : 'text-muted-foreground'
+              }
+            />
+            <StatCard
+              title="Stop Failures"
+              value={totalOverview.total_stop_failures}
+              icon={OctagonX}
+              iconColor={
+                totalOverview.total_stop_failures > 0
+                  ? 'text-destructive'
+                  : 'text-muted-foreground'
+              }
+              valueClassName={
+                totalOverview.total_stop_failures > 0
                   ? 'text-destructive'
                   : 'text-muted-foreground'
               }

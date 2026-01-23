@@ -6,6 +6,7 @@ import {
   Circle,
   Loader,
   Moon,
+  OctagonX,
   Play,
   Server,
   Sun,
@@ -135,7 +136,8 @@ function AppDetailPage() {
 
       {/* Loading State */}
       {isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
@@ -155,7 +157,7 @@ function AppDetailPage() {
 
       {/* Stats Grid */}
       {appOverview && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard
             title="Total Runs"
             value={appOverview.total_runs}
@@ -188,6 +190,21 @@ function AppDetailPage() {
             }
             valueClassName={
               appOverview.total_start_failures > 0
+                ? 'text-destructive'
+                : 'text-muted-foreground'
+            }
+          />
+          <StatCard
+            title="Stop Failures"
+            value={appOverview.total_stop_failures}
+            icon={OctagonX}
+            iconColor={
+              appOverview.total_stop_failures > 0
+                ? 'text-destructive'
+                : 'text-muted-foreground'
+            }
+            valueClassName={
+              appOverview.total_stop_failures > 0
                 ? 'text-destructive'
                 : 'text-muted-foreground'
             }

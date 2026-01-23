@@ -31,6 +31,7 @@ pub struct TotalOverview {
     pub total_awake_time_ms: i64,
     pub total_sleep_time_ms: i64,
     pub total_start_failures: i64,
+    pub total_stop_failures: i64,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -40,6 +41,7 @@ pub struct AppOverview {
     pub total_awake_time_ms: i64,
     pub total_sleep_time_ms: i64,
     pub total_start_failures: i64,
+    pub total_stop_failures: i64,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -92,6 +94,7 @@ impl Reporter for SqliteDatabase {
                     started_at,
                     stopped_at,
                     start_failed,
+                    stop_failed,
                     LAG(stopped_at) OVER (ORDER BY started_at) as prev_stopped_at
                 FROM runs
                 WHERE ($1 IS NULL OR started_at >= $1)
@@ -111,25 +114,31 @@ impl Reporter for SqliteDatabase {
                 COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
                 COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0)
                     + (SELECT ongoing_sleep_ms FROM current_sleep) as total_sleep_time_ms,
-                COALESCE(SUM(start_failed), 0) as total_start_failures
+                COALESCE(SUM(start_failed), 0) as total_start_failures,
+                COALESCE(SUM(stop_failed), 0) as total_stop_failures
             FROM ordered_runs
         "#;
 
-        let row = sqlx::query_as::<_, (i64, i64, i64, i64)>(query)
+        let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64)>(query)
             .bind(time_range.start)
             .bind(time_range.end)
             .fetch_one(&self.pool)
             .await;
 
         match row {
-            Ok((total_runs, total_awake_time_ms, total_sleep_time_ms, total_start_failures)) => {
-                TotalOverview {
-                    total_runs,
-                    total_awake_time_ms,
-                    total_sleep_time_ms,
-                    total_start_failures,
-                }
-            }
+            Ok((
+                total_runs,
+                total_awake_time_ms,
+                total_sleep_time_ms,
+                total_start_failures,
+                total_stop_failures,
+            )) => TotalOverview {
+                total_runs,
+                total_awake_time_ms,
+                total_sleep_time_ms,
+                total_start_failures,
+                total_stop_failures,
+            },
             Err(e) => {
                 error!("failed to query total overview: {e}");
                 TotalOverview::default()
@@ -147,6 +156,7 @@ impl Reporter for SqliteDatabase {
                     started_at,
                     stopped_at,
                     start_failed,
+                    stop_failed,
                     LAG(stopped_at) OVER (PARTITION BY host ORDER BY started_at) as prev_stopped_at
                 FROM runs
                 WHERE ($1 IS NULL OR started_at >= $1)
@@ -176,13 +186,14 @@ impl Reporter for SqliteDatabase {
                 COALESCE(SUM(CASE WHEN o.stopped_at IS NOT NULL THEN o.stopped_at - o.started_at ELSE 0 END), 0) as total_awake_time_ms,
                 COALESCE(SUM(CASE WHEN o.prev_stopped_at IS NOT NULL AND o.started_at > o.prev_stopped_at THEN o.started_at - o.prev_stopped_at ELSE 0 END), 0)
                     + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep_per_host WHERE host = o.host), 0) as total_sleep_time_ms,
-                COALESCE(SUM(o.start_failed), 0) as total_start_failures
+                COALESCE(SUM(o.start_failed), 0) as total_start_failures,
+                COALESCE(SUM(o.stop_failed), 0) as total_stop_failures
             FROM ordered_runs o
             GROUP BY o.host
             ORDER BY o.host
         "#;
 
-        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64)>(query)
+        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64)>(query)
             .bind(time_range.start)
             .bind(time_range.end)
             .fetch_all(&self.pool)
@@ -198,12 +209,14 @@ impl Reporter for SqliteDatabase {
                         total_awake_time_ms,
                         total_sleep_time_ms,
                         total_start_failures,
+                        total_stop_failures,
                     )| AppOverview {
                         host,
                         total_runs,
                         total_awake_time_ms,
                         total_sleep_time_ms,
                         total_start_failures,
+                        total_stop_failures,
                     },
                 )
                 .collect(),
@@ -228,6 +241,7 @@ impl Reporter for SqliteDatabase {
                     started_at,
                     stopped_at,
                     start_failed,
+                    stop_failed,
                     LAG(stopped_at) OVER (ORDER BY started_at) as prev_stopped_at
                 FROM runs
                 WHERE host = $1
@@ -255,11 +269,12 @@ impl Reporter for SqliteDatabase {
                 COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
                 COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0)
                     + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep), 0) as total_sleep_time_ms,
-                COALESCE(SUM(start_failed), 0) as total_start_failures
+                COALESCE(SUM(start_failed), 0) as total_start_failures,
+                COALESCE(SUM(stop_failed), 0) as total_stop_failures
             FROM ordered_runs
         "#;
 
-        let row = sqlx::query_as::<_, (i64, i64, i64, i64)>(query)
+        let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64)>(query)
             .bind(&host.0)
             .bind(time_range.start)
             .bind(time_range.end)
@@ -272,6 +287,7 @@ impl Reporter for SqliteDatabase {
                 total_awake_time_ms,
                 total_sleep_time_ms,
                 total_start_failures,
+                total_stop_failures,
             ))) => {
                 if total_runs == 0 {
                     return None;
@@ -282,6 +298,7 @@ impl Reporter for SqliteDatabase {
                     total_awake_time_ms,
                     total_sleep_time_ms,
                     total_start_failures,
+                    total_stop_failures,
                 })
             }
             Ok(None) => None,

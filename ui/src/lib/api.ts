@@ -12,6 +12,7 @@ const totalOverviewSchema = z.object({
   total_awake_time_ms: z.number(),
   total_sleep_time_ms: z.number(),
   total_start_failures: z.number(),
+  total_stop_failures: z.number(),
 });
 
 const appOverviewSchema = z.object({
@@ -20,6 +21,7 @@ const appOverviewSchema = z.object({
   total_awake_time_ms: z.number(),
   total_sleep_time_ms: z.number(),
   total_start_failures: z.number(),
+  total_stop_failures: z.number(),
 });
 
 const appRunSchema = z.object({
