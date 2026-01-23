@@ -6,7 +6,7 @@ import {
   Circle,
   Layers,
   Moon,
-  OctagonX,
+  Percent,
   Play,
   Server,
   Sun,
@@ -23,6 +23,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { $fetch, type AppOverview } from '@/lib/api';
 import { formatMs } from '@/lib/format';
 import { timeRangeSearchSchema } from '@/lib/searchSchemas';
+
+function formatFailureRate(failures: number, total: number): string {
+  if (total === 0) return '0%';
+  const rate = (failures / total) * 100;
+  if (rate === 0) return '0%';
+  if (rate < 1) return '<1%';
+  return `${Math.round(rate)}%`;
+}
 
 export const Route = createFileRoute('/')({
   component: App,
@@ -260,10 +268,9 @@ function App() {
       {error && <ErrorBanner message={`Error: ${error.message}`} />}
 
       {/* Stats Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {isTotalLoading ? (
           <>
-            <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
@@ -308,31 +315,24 @@ function App() {
               valueClassName="text-chart-4"
             />
             <StatCard
-              title="Start Failures"
-              value={totalOverview.total_start_failures}
-              icon={AlertTriangle}
+              title="Failure Rate"
+              value={formatFailureRate(
+                totalOverview.total_start_failures +
+                  totalOverview.total_stop_failures,
+                totalOverview.total_runs,
+              )}
+              icon={Percent}
               iconColor={
-                totalOverview.total_start_failures > 0
+                totalOverview.total_start_failures +
+                  totalOverview.total_stop_failures >
+                0
                   ? 'text-destructive'
                   : 'text-muted-foreground'
               }
               valueClassName={
-                totalOverview.total_start_failures > 0
-                  ? 'text-destructive'
-                  : 'text-muted-foreground'
-              }
-            />
-            <StatCard
-              title="Stop Failures"
-              value={totalOverview.total_stop_failures}
-              icon={OctagonX}
-              iconColor={
-                totalOverview.total_stop_failures > 0
-                  ? 'text-destructive'
-                  : 'text-muted-foreground'
-              }
-              valueClassName={
-                totalOverview.total_stop_failures > 0
+                totalOverview.total_start_failures +
+                  totalOverview.total_stop_failures >
+                0
                   ? 'text-destructive'
                   : 'text-muted-foreground'
               }

@@ -1,12 +1,11 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
-  AlertTriangle,
   ArrowLeft,
   Circle,
   Loader,
   Moon,
-  OctagonX,
+  Percent,
   Play,
   Server,
   Sun,
@@ -23,6 +22,14 @@ import {
 import { $fetch } from '@/lib/api';
 import { formatMs } from '@/lib/format';
 import { timeRangeSearchSchema } from '@/lib/searchSchemas';
+
+function formatFailureRate(failures: number, total: number): string {
+  if (total === 0) return '0%';
+  const rate = (failures / total) * 100;
+  if (rate === 0) return '0%';
+  if (rate < 1) return '<1%';
+  return `${Math.round(rate)}%`;
+}
 
 export const Route = createFileRoute('/app/$host')({
   component: AppDetailPage,
@@ -147,8 +154,7 @@ function AppDetailPage() {
 
       {/* Loading State */}
       {isLoading && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCardSkeleton />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCardSkeleton />
           <StatCardSkeleton />
           <StatCardSkeleton />
@@ -169,7 +175,7 @@ function AppDetailPage() {
 
       {/* Stats Grid */}
       {appOverview && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard
             title="Total Runs"
             value={appOverview.total_runs}
@@ -205,31 +211,24 @@ function AppDetailPage() {
             valueClassName="text-chart-4"
           />
           <StatCard
-            title="Start Failures"
-            value={appOverview.total_start_failures}
-            icon={AlertTriangle}
+            title="Failure Rate"
+            value={formatFailureRate(
+              appOverview.total_start_failures +
+                appOverview.total_stop_failures,
+              appOverview.total_runs,
+            )}
+            icon={Percent}
             iconColor={
-              appOverview.total_start_failures > 0
+              appOverview.total_start_failures +
+                appOverview.total_stop_failures >
+              0
                 ? 'text-destructive'
                 : 'text-muted-foreground'
             }
             valueClassName={
-              appOverview.total_start_failures > 0
-                ? 'text-destructive'
-                : 'text-muted-foreground'
-            }
-          />
-          <StatCard
-            title="Stop Failures"
-            value={appOverview.total_stop_failures}
-            icon={OctagonX}
-            iconColor={
-              appOverview.total_stop_failures > 0
-                ? 'text-destructive'
-                : 'text-muted-foreground'
-            }
-            valueClassName={
-              appOverview.total_stop_failures > 0
+              appOverview.total_start_failures +
+                appOverview.total_stop_failures >
+              0
                 ? 'text-destructive'
                 : 'text-muted-foreground'
             }
