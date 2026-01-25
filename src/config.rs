@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -429,6 +430,37 @@ where
         .collect())
 }
 
+/// TLS configuration for automatic certificate provisioning.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TlsConfig {
+    /// Enable automatic TLS certificate provisioning.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Contact email for ACME account registration.
+    pub acme_email: String,
+
+    /// Use Let's Encrypt staging environment (for testing).
+    #[serde(default)]
+    pub staging: bool,
+
+    /// Directory to store certificates.
+    #[serde(default = "default_certs_dir")]
+    pub certs_dir: PathBuf,
+
+    /// Days before expiry to renew certificates.
+    #[serde(default = "default_renewal_days")]
+    pub renewal_days: u32,
+}
+
+fn default_certs_dir() -> PathBuf {
+    PathBuf::from("./certs")
+}
+
+fn default_renewal_days() -> u32 {
+    30
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     #[serde(default)]
@@ -436,6 +468,10 @@ pub struct Config {
 
     #[serde(default = "default_database_url")]
     pub database_url: String,
+
+    /// TLS configuration for automatic certificate provisioning.
+    #[serde(default)]
+    pub tls: Option<TlsConfig>,
 
     #[serde(flatten, deserialize_with = "deserialize_apps")]
     pub apps: HashMap<String, Arc<RwLock<App>>>,

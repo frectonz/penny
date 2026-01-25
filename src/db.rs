@@ -54,6 +54,47 @@ impl SqliteDatabase {
         .execute(&pool)
         .await?;
 
+        sqlx::query(
+            r#"
+            CREATE TABLE IF NOT EXISTS acme_account (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                private_key_pem TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+
         Ok(Self { pool })
+    }
+
+    /// Gets the stored ACME account private key PEM if it exists.
+    pub async fn get_acme_account(&self) -> color_eyre::Result<Option<String>> {
+        let result: Option<(String,)> = sqlx::query_as(
+            r#"SELECT private_key_pem FROM acme_account WHERE id = 1"#,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(result.map(|(pem,)| pem))
+    }
+
+    /// Saves the ACME account private key PEM.
+    pub async fn save_acme_account(&self, private_key_pem: &str) -> color_eyre::Result<()> {
+        let now = jiff::Timestamp::now().as_millisecond();
+
+        sqlx::query(
+            r#"
+            INSERT OR REPLACE INTO acme_account (id, private_key_pem, created_at)
+            VALUES (1, ?, ?)
+            "#,
+        )
+        .bind(private_key_pem)
+        .bind(now)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
     }
 }

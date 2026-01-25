@@ -1,0 +1,266 @@
+use color_eyre::eyre::{eyre, Context};
+use instant_acme::{
+    Account, AccountCredentials, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt,
+    NewAccount, NewOrder, OrderStatus,
+};
+use rcgen::{CertificateParams, DistinguishedName, KeyPair};
+use tracing::{debug, info};
+
+use crate::challenge::{add_challenge, remove_challenge, ChallengeStore};
+use crate::config::TlsConfig;
+use crate::db::SqliteDatabase;
+
+/// A pending HTTP-01 challenge that needs to be completed.
+#[allow(dead_code)]
+pub struct PendingChallenge {
+    pub domain: String,
+    pub token: String,
+    pub key_authorization: String,
+}
+
+/// ACME client for obtaining and managing certificates.
+pub struct AcmeClient {
+    account: Account,
+    staging: bool,
+}
+
+impl AcmeClient {
+    /// Creates a new ACME client, loading or creating an account as needed.
+    pub async fn new(config: &TlsConfig, db: &SqliteDatabase) -> color_eyre::Result<Self> {
+        let account = match db.get_acme_account().await? {
+            Some(pem) => {
+                info!("loading existing ACME account");
+                Self::load_account(&pem).await?
+            }
+            None => {
+                info!("creating new ACME account");
+                let (account, pem) = Self::create_account(&config.acme_email, config.staging).await?;
+                db.save_acme_account(&pem).await?;
+                account
+            }
+        };
+
+        Ok(Self {
+            account,
+            staging: config.staging,
+        })
+    }
+
+    /// Creates a new ACME account and returns it along with the private key PEM.
+    async fn create_account(email: &str, staging: bool) -> color_eyre::Result<(Account, String)> {
+        let url = if staging {
+            LetsEncrypt::Staging.url()
+        } else {
+            LetsEncrypt::Production.url()
+        };
+
+        let (account, credentials) = Account::create(
+            &NewAccount {
+                contact: &[&format!("mailto:{}", email)],
+                terms_of_service_agreed: true,
+                only_return_existing: false,
+            },
+            url,
+            None,
+        )
+        .await
+        .wrap_err("failed to create ACME account")?;
+
+        let pem = serde_json::to_string(&credentials)
+            .wrap_err("failed to serialize ACME credentials")?;
+
+        Ok((account, pem))
+    }
+
+    /// Loads an existing ACME account from credentials PEM.
+    async fn load_account(pem: &str) -> color_eyre::Result<Account> {
+        let credentials: AccountCredentials = serde_json::from_str(pem)
+            .wrap_err("failed to deserialize ACME credentials")?;
+
+        Account::from_credentials(credentials)
+            .await
+            .wrap_err("failed to load ACME account")
+    }
+
+    /// Requests a certificate for the given domains.
+    /// Returns the certificate and private key as PEM strings.
+    pub async fn obtain_certificate(
+        &self,
+        domains: &[&str],
+        challenge_store: &ChallengeStore,
+    ) -> color_eyre::Result<(String, String)> {
+        if domains.is_empty() {
+            return Err(eyre!("no domains provided"));
+        }
+
+        info!(domains = ?domains, staging = self.staging, "requesting certificate");
+
+        // Create identifiers for all domains
+        let identifiers: Vec<Identifier> = domains
+            .iter()
+            .map(|d| Identifier::Dns((*d).to_owned()))
+            .collect();
+
+        // Create the order
+        let mut order = self
+            .account
+            .new_order(&NewOrder {
+                identifiers: &identifiers,
+            })
+            .await
+            .wrap_err("failed to create ACME order")?;
+
+        let state = order.state();
+        debug!(status = ?state.status, "order created");
+
+        // Get authorizations and set up challenges
+        let authorizations = order
+            .authorizations()
+            .await
+            .wrap_err("failed to get authorizations")?;
+
+        let mut challenges_to_complete = Vec::new();
+
+        for auth in &authorizations {
+            match auth.status {
+                AuthorizationStatus::Valid => {
+                    debug!(identifier = ?auth.identifier, "authorization already valid");
+                    continue;
+                }
+                AuthorizationStatus::Pending => {
+                    debug!(identifier = ?auth.identifier, "authorization pending, setting up challenge");
+                }
+                status => {
+                    return Err(eyre!("unexpected authorization status: {:?}", status));
+                }
+            }
+
+            // Find HTTP-01 challenge
+            let challenge = auth
+                .challenges
+                .iter()
+                .find(|c| c.r#type == ChallengeType::Http01)
+                .ok_or_else(|| eyre!("no HTTP-01 challenge found"))?;
+
+            let domain = match &auth.identifier {
+                Identifier::Dns(domain) => domain.clone(),
+            };
+
+            let token = challenge.token.clone();
+            let key_auth = order.key_authorization(challenge).as_str().to_owned();
+
+            // Add challenge to store so HTTP server can respond
+            add_challenge(challenge_store, token.clone(), key_auth.clone()).await;
+
+            challenges_to_complete.push(PendingChallenge {
+                domain,
+                token,
+                key_authorization: key_auth,
+            });
+        }
+
+        // Set challenges ready (tell ACME server we're ready)
+        for auth in &authorizations {
+            if auth.status != AuthorizationStatus::Pending {
+                continue;
+            }
+
+            let challenge = auth
+                .challenges
+                .iter()
+                .find(|c| c.r#type == ChallengeType::Http01)
+                .ok_or_else(|| eyre!("no HTTP-01 challenge found"))?;
+
+            order
+                .set_challenge_ready(&challenge.url)
+                .await
+                .wrap_err("failed to set challenge ready")?;
+        }
+
+        // Wait for order to become ready
+        let mut tries = 0;
+        let max_tries = 20;
+        let _state = loop {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let state = order.refresh().await.wrap_err("failed to refresh order")?;
+
+            debug!(status = ?state.status, tries = tries, "checking order status");
+
+            match state.status {
+                OrderStatus::Ready => break state,
+                OrderStatus::Invalid => {
+                    // Clean up challenges
+                    for challenge in &challenges_to_complete {
+                        remove_challenge(challenge_store, &challenge.token).await;
+                    }
+                    return Err(eyre!("order became invalid"));
+                }
+                OrderStatus::Valid => break state,
+                OrderStatus::Pending => {
+                    tries += 1;
+                    if tries >= max_tries {
+                        // Clean up challenges
+                        for challenge in &challenges_to_complete {
+                            remove_challenge(challenge_store, &challenge.token).await;
+                        }
+                        return Err(eyre!("order did not become ready in time"));
+                    }
+                }
+                OrderStatus::Processing => {
+                    tries += 1;
+                    if tries >= max_tries {
+                        // Clean up challenges
+                        for challenge in &challenges_to_complete {
+                            remove_challenge(challenge_store, &challenge.token).await;
+                        }
+                        return Err(eyre!("order processing timed out"));
+                    }
+                }
+            }
+        };
+
+        // Clean up challenges
+        for challenge in &challenges_to_complete {
+            remove_challenge(challenge_store, &challenge.token).await;
+        }
+
+        // Generate CSR
+        let key_pair = KeyPair::generate().wrap_err("failed to generate key pair")?;
+        let private_key_pem = key_pair.serialize_pem();
+
+        let domain_strings: Vec<String> = domains.iter().map(|s| (*s).to_owned()).collect();
+        let mut params = CertificateParams::new(domain_strings)
+            .wrap_err("failed to create certificate params")?;
+        params.distinguished_name = DistinguishedName::new();
+
+        let csr = params
+            .serialize_request(&key_pair)
+            .wrap_err("failed to serialize CSR")?;
+
+        // Finalize order with CSR
+        order
+            .finalize(csr.der())
+            .await
+            .wrap_err("failed to finalize order")?;
+
+        // Wait for certificate
+        let mut tries = 0;
+        let cert_chain_pem = loop {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+            match order.certificate().await.wrap_err("failed to get certificate")? {
+                Some(cert) => break cert,
+                None => {
+                    tries += 1;
+                    if tries >= 10 {
+                        return Err(eyre!("certificate not ready in time"));
+                    }
+                }
+            }
+        };
+
+        info!(domains = ?domains, "certificate obtained successfully");
+
+        Ok((cert_chain_pem, private_key_pem))
+    }
+}
