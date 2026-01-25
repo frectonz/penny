@@ -1,4 +1,4 @@
-use color_eyre::eyre::{eyre, Context};
+use color_eyre::eyre::{Context, eyre};
 use instant_acme::{
     Account, AccountCredentials, AuthorizationStatus, ChallengeType, Identifier, LetsEncrypt,
     NewAccount, NewOrder, OrderStatus,
@@ -6,7 +6,7 @@ use instant_acme::{
 use rcgen::{CertificateParams, DistinguishedName, KeyPair};
 use tracing::{debug, info};
 
-use crate::challenge::{add_challenge, remove_challenge, ChallengeStore};
+use crate::challenge::{ChallengeStore, add_challenge, remove_challenge};
 use crate::config::TlsConfig;
 use crate::db::SqliteDatabase;
 
@@ -34,7 +34,8 @@ impl AcmeClient {
             }
             None => {
                 info!("creating new ACME account");
-                let (account, pem) = Self::create_account(&config.acme_email, config.staging).await?;
+                let (account, pem) =
+                    Self::create_account(&config.acme_email, config.staging).await?;
                 db.save_acme_account(&pem).await?;
                 account
             }
@@ -66,16 +67,16 @@ impl AcmeClient {
         .await
         .wrap_err("failed to create ACME account")?;
 
-        let pem = serde_json::to_string(&credentials)
-            .wrap_err("failed to serialize ACME credentials")?;
+        let pem =
+            serde_json::to_string(&credentials).wrap_err("failed to serialize ACME credentials")?;
 
         Ok((account, pem))
     }
 
     /// Loads an existing ACME account from credentials PEM.
     async fn load_account(pem: &str) -> color_eyre::Result<Account> {
-        let credentials: AccountCredentials = serde_json::from_str(pem)
-            .wrap_err("failed to deserialize ACME credentials")?;
+        let credentials: AccountCredentials =
+            serde_json::from_str(pem).wrap_err("failed to deserialize ACME credentials")?;
 
         Account::from_credentials(credentials)
             .await
@@ -248,7 +249,11 @@ impl AcmeClient {
         let cert_chain_pem = loop {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-            match order.certificate().await.wrap_err("failed to get certificate")? {
+            match order
+                .certificate()
+                .await
+                .wrap_err("failed to get certificate")?
+            {
                 Some(cert) => break cert,
                 None => {
                     tries += 1;

@@ -4,7 +4,7 @@ use bytes::Bytes;
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
-use crate::challenge::{get_challenge, ChallengeStore};
+use crate::challenge::{ChallengeStore, get_challenge};
 use crate::collector::Collector;
 use crate::config::{App, Config};
 use crate::types::Host;

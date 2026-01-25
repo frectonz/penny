@@ -15,7 +15,7 @@ use tracing::{error, info, warn};
 
 use acme::AcmeClient;
 use api::create_api_router;
-use challenge::{create_challenge_store, ChallengeStore};
+use challenge::{ChallengeStore, create_challenge_store};
 use config::{Config, TlsConfig};
 use db::SqliteDatabase;
 use proxy::YarpProxy;

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use color_eyre::eyre::{eyre, Context};
+use color_eyre::eyre::{Context, eyre};
 use tracing::{debug, info, warn};
 use x509_parser::prelude::*;
 
@@ -123,12 +123,14 @@ impl CertificateStore {
 
     /// Returns the path to the certificate file for a domain.
     fn cert_path(&self, domain: &str) -> PathBuf {
-        self.certs_dir.join(format!("{}.crt", sanitize_domain(domain)))
+        self.certs_dir
+            .join(format!("{}.crt", sanitize_domain(domain)))
     }
 
     /// Returns the path to the private key file for a domain.
     fn key_path(&self, domain: &str) -> PathBuf {
-        self.certs_dir.join(format!("{}.key", sanitize_domain(domain)))
+        self.certs_dir
+            .join(format!("{}.key", sanitize_domain(domain)))
     }
 }
 

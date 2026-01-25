@@ -71,11 +71,10 @@ impl SqliteDatabase {
 
     /// Gets the stored ACME account private key PEM if it exists.
     pub async fn get_acme_account(&self) -> color_eyre::Result<Option<String>> {
-        let result: Option<(String,)> = sqlx::query_as(
-            r#"SELECT private_key_pem FROM acme_account WHERE id = 1"#,
-        )
-        .fetch_optional(&self.pool)
-        .await?;
+        let result: Option<(String,)> =
+            sqlx::query_as(r#"SELECT private_key_pem FROM acme_account WHERE id = 1"#)
+                .fetch_optional(&self.pool)
+                .await?;
 
         Ok(result.map(|(pem,)| pem))
     }
