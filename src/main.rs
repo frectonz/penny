@@ -2,6 +2,7 @@ mod acme;
 mod api;
 mod auth;
 mod challenge;
+mod check;
 mod collector;
 mod config;
 mod db;
@@ -50,6 +51,15 @@ enum Command {
         /// Password for dashboard access (can also use PENNY_PASSWORD env var)
         #[arg(long, env = "PENNY_PASSWORD")]
         password: Option<String>,
+    },
+    /// Check app start/stop commands by running them.
+    Check {
+        /// Path to the config file.
+        config: String,
+
+        /// Optional list of specific apps to check (by hostname).
+        #[arg(long, value_delimiter = ',')]
+        apps: Option<Vec<String>>,
     },
 }
 
@@ -118,77 +128,84 @@ fn main() -> color_eyre::Result<()> {
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .init();
 
-    let Args {
-        command:
-            Command::Serve {
-                config,
-                address,
-                https_address,
-                no_tls,
-                password,
-            },
-    } = Args::parse();
+    let args = Args::parse();
 
-    auth::init_password(password.clone());
-    info!(
-        config = %config,
-        address = %address,
-        https_address = %https_address,
-        auth_enabled = password.is_some(),
-        "starting penny proxy"
-    );
+    match args.command {
+        Command::Check { config, apps } => {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(check::run_check(&config, apps))?;
+            Ok(())
+        }
+        Command::Serve {
+            config,
+            address,
+            https_address,
+            no_tls,
+            password,
+        } => {
+            auth::init_password(password.clone());
+            info!(
+                config = %config,
+                address = %address,
+                https_address = %https_address,
+                auth_enabled = password.is_some(),
+                "starting penny proxy"
+            );
 
-    let config_content = std::fs::read_to_string(&config)?;
-    let config: Config = toml::from_str(&config_content)?;
+            let config_content = std::fs::read_to_string(&config)?;
+            let config: Config = toml::from_str(&config_content)?;
 
-    info!(apps_count = config.apps.len(), "loaded configuration");
-    for (host, app) in &config.apps {
-        let app = app.blocking_read();
-        info!(
-            host = %host,
-            address = %app.address,
-            health_check = %app.health_check,
-            "registered app"
-        );
-    }
+            info!(apps_count = config.apps.len(), "loaded configuration");
+            for (host, app) in &config.apps {
+                let app = app.blocking_read();
+                info!(
+                    host = %host,
+                    address = %app.address,
+                    health_check = %app.health_check,
+                    "registered app"
+                );
+            }
 
-    let mut server = pingora::server::Server::new(None).unwrap();
-    server.bootstrap();
+            let mut server = pingora::server::Server::new(None).unwrap();
+            server.bootstrap();
 
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-    let (collector, challenge_store) = runtime.block_on(setup(&config, no_tls))?;
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let (collector, challenge_store) = runtime.block_on(setup(&config, no_tls))?;
 
-    let tls_enabled = config.tls.as_ref().is_some_and(|t| t.enabled) && !no_tls;
-    let tls_config = config.tls.clone();
-    let domains: Vec<String> = config.apps.keys().cloned().collect();
+            let tls_enabled = config.tls.as_ref().is_some_and(|t| t.enabled) && !no_tls;
+            let tls_config = config.tls.clone();
+            let domains: Vec<String> = config.apps.keys().cloned().collect();
 
-    let proxy = YarpProxy::new(config, collector, challenge_store);
-    let mut proxy_service = pingora::prelude::http_proxy_service(&server.configuration, proxy);
+            let proxy = YarpProxy::new(config, collector, challenge_store);
+            let mut proxy_service =
+                pingora::prelude::http_proxy_service(&server.configuration, proxy);
 
-    proxy_service.add_tcp(&address);
-    info!(address = %address, "HTTP proxy server listening");
+            proxy_service.add_tcp(&address);
+            info!(address = %address, "HTTP proxy server listening");
 
-    if tls_enabled && !domains.is_empty() {
-        let tls_config = tls_config.as_ref().unwrap();
-        let cert_store = CertificateStore::new(&tls_config.certs_dir)?;
+            if tls_enabled && !domains.is_empty() {
+                let tls_config = tls_config.as_ref().unwrap();
+                let cert_store = CertificateStore::new(&tls_config.certs_dir)?;
 
-        // Use the first domain's certificate as default (SNI will be handled by OpenSSL)
-        if let Some((cert_path, key_path)) = cert_store.get_certificate(&domains[0]) {
-            let tls_settings = pingora::listeners::tls::TlsSettings::intermediate(
-                cert_path.to_str().unwrap(),
-                key_path.to_str().unwrap(),
-            )?;
+                // Use the first domain's certificate as default (SNI will be handled by OpenSSL)
+                if let Some((cert_path, key_path)) = cert_store.get_certificate(&domains[0]) {
+                    let tls_settings = pingora::listeners::tls::TlsSettings::intermediate(
+                        cert_path.to_str().unwrap(),
+                        key_path.to_str().unwrap(),
+                    )?;
 
-            proxy_service.add_tls_with_settings(&https_address, None, tls_settings);
-            info!(address = %https_address, "HTTPS proxy server listening");
-        } else {
-            warn!("no certificates available, HTTPS listener not started");
+                    proxy_service.add_tls_with_settings(&https_address, None, tls_settings);
+                    info!(address = %https_address, "HTTPS proxy server listening");
+                } else {
+                    warn!("no certificates available, HTTPS listener not started");
+                }
+            }
+
+            server.add_service(proxy_service);
+
+            server.run_forever()
         }
     }
-
-    server.add_service(proxy_service);
-
-    server.run_forever()
 }
 
 /// Provisions certificates for all domains that need them.
