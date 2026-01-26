@@ -53,6 +53,62 @@ enum Command {
     },
 }
 
+async fn setup_api_server(api_address: Option<std::net::SocketAddr>, collector: SqliteDatabase) {
+    if let Some(api_address) = api_address {
+        let router = create_api_router(collector);
+        let listener = tokio::net::TcpListener::bind(api_address).await.unwrap();
+        info!(address = %api_address, "API server listening");
+        tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+    }
+}
+
+async fn setup_tls(
+    domains: Vec<String>,
+    collector: SqliteDatabase,
+    challenge_store: ChallengeStore,
+    tls_config: TlsConfig,
+) -> color_eyre::Result<()> {
+    if domains.is_empty() {
+        warn!("TLS enabled but no apps configured, skipping certificate provisioning");
+        return Ok(());
+    }
+
+    provision_certificates(&domains, &collector, &challenge_store, &tls_config).await?;
+
+    tokio::spawn(async move {
+        renewal_loop(domains, collector, challenge_store, tls_config).await;
+    });
+
+    Ok(())
+}
+
+async fn setup(
+    config: &Config,
+    no_tls: bool,
+) -> color_eyre::Result<(SqliteDatabase, ChallengeStore)> {
+    let collector = SqliteDatabase::new(&config.database_url).await?;
+    setup_api_server(config.api_address, collector.clone()).await;
+    let challenge_store = create_challenge_store();
+
+    if let Some(tls_config) = &config.tls
+        && tls_config.enabled
+        && !no_tls
+    {
+        let domains: Vec<String> = config.apps.keys().cloned().collect();
+        setup_tls(
+            domains,
+            collector.clone(),
+            challenge_store.clone(),
+            tls_config.clone(),
+        )
+        .await?;
+    }
+
+    Ok((collector, challenge_store))
+}
+
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
 
@@ -82,9 +138,6 @@ fn main() -> color_eyre::Result<()> {
         "starting penny proxy"
     );
 
-    let mut server = pingora::server::Server::new(None).unwrap();
-    server.bootstrap();
-
     let config_content = std::fs::read_to_string(&config)?;
     let config: Config = toml::from_str(&config_content)?;
 
@@ -99,68 +152,22 @@ fn main() -> color_eyre::Result<()> {
         );
     }
 
+    let mut server = pingora::server::Server::new(None).unwrap();
+    server.bootstrap();
+
     let runtime = tokio::runtime::Runtime::new().unwrap();
-    let collector = runtime.block_on(SqliteDatabase::new(&config.database_url))?;
+    let (collector, challenge_store) = runtime.block_on(setup(&config, no_tls))?;
 
-    if let Some(api_address) = config.api_address {
-        let api_collector = collector.clone();
-        runtime.spawn(async move {
-            let router = create_api_router(api_collector);
-            let listener = tokio::net::TcpListener::bind(api_address).await.unwrap();
-            info!(address = %api_address, "API server listening");
-            axum::serve(listener, router).await.unwrap();
-        });
-    }
-
-    // Create challenge store for ACME HTTP-01 challenges
-    let challenge_store = create_challenge_store();
-
-    // Check if TLS is enabled and extract configuration before moving config
     let tls_enabled = config.tls.as_ref().is_some_and(|t| t.enabled) && !no_tls;
     let tls_config = config.tls.clone();
     let domains: Vec<String> = config.apps.keys().cloned().collect();
 
-    if tls_enabled {
-        let tls_config = tls_config.as_ref().unwrap();
-
-        if domains.is_empty() {
-            warn!("TLS enabled but no apps configured, skipping certificate provisioning");
-        } else {
-            // Provision certificates
-            runtime.block_on(provision_certificates(
-                &domains,
-                &collector,
-                &challenge_store,
-                tls_config,
-            ))?;
-
-            // Spawn renewal background task
-            let renewal_collector = collector.clone();
-            let renewal_store = challenge_store.clone();
-            let renewal_config = tls_config.clone();
-            let renewal_domains = domains.clone();
-
-            runtime.spawn(async move {
-                renewal_loop(
-                    renewal_domains,
-                    renewal_collector,
-                    renewal_store,
-                    renewal_config,
-                )
-                .await;
-            });
-        }
-    }
-
     let proxy = YarpProxy::new(config, collector, challenge_store);
-
     let mut proxy_service = pingora::prelude::http_proxy_service(&server.configuration, proxy);
 
-    // Always add HTTP listener (needed for ACME challenges and non-TLS traffic)
     proxy_service.add_tcp(&address);
     info!(address = %address, "HTTP proxy server listening");
 
-    // Add HTTPS listener if TLS is enabled
     if tls_enabled && !domains.is_empty() {
         let tls_config = tls_config.as_ref().unwrap();
         let cert_store = CertificateStore::new(&tls_config.certs_dir)?;
