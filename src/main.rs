@@ -12,6 +12,7 @@ mod tls;
 mod types;
 
 use clap::{Parser, Subcommand};
+use color_eyre::eyre::Context;
 use tracing::{error, info, warn};
 
 use acme::AcmeClient;
@@ -20,7 +21,8 @@ use challenge::{ChallengeStore, create_challenge_store};
 use config::{Config, TlsConfig};
 use db::SqliteDatabase;
 use proxy::YarpProxy;
-use tls::CertificateStore;
+use tls::{CertificateStore, DynamicCertificates};
+
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -132,7 +134,7 @@ fn main() -> color_eyre::Result<()> {
 
     match args.command {
         Command::Check { config, apps } => {
-            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let runtime = tokio::runtime::Runtime::new().context("creating tokio runtime")?;
             runtime.block_on(check::run_check(&config, apps))?;
             Ok(())
         }
@@ -166,10 +168,11 @@ fn main() -> color_eyre::Result<()> {
                 );
             }
 
-            let mut server = pingora::server::Server::new(None).unwrap();
+            let mut server =
+                pingora::server::Server::new(None).context("creating pingora server")?;
             server.bootstrap();
 
-            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let runtime = tokio::runtime::Runtime::new().context("creating tokio runtime")?;
             let (collector, challenge_store) = runtime.block_on(setup(&config, no_tls))?;
 
             let tls_enabled = config.tls.as_ref().is_some_and(|t| t.enabled) && !no_tls;
@@ -186,23 +189,16 @@ fn main() -> color_eyre::Result<()> {
             if tls_enabled && !domains.is_empty() {
                 let tls_config = tls_config.as_ref().unwrap();
                 let cert_store = CertificateStore::new(&tls_config.certs_dir)?;
+                let dynamic_certs = DynamicCertificates::new(cert_store);
+                let tls_settings = pingora::listeners::tls::TlsSettings::with_callbacks(
+                    Box::new(dynamic_certs),
+                )?;
 
-                // Use the first domain's certificate as default (SNI will be handled by OpenSSL)
-                if let Some((cert_path, key_path)) = cert_store.get_certificate(&domains[0]) {
-                    let tls_settings = pingora::listeners::tls::TlsSettings::intermediate(
-                        cert_path.to_str().unwrap(),
-                        key_path.to_str().unwrap(),
-                    )?;
-
-                    proxy_service.add_tls_with_settings(&https_address, None, tls_settings);
-                    info!(address = %https_address, "HTTPS proxy server listening");
-                } else {
-                    warn!("no certificates available, HTTPS listener not started");
-                }
+                proxy_service.add_tls_with_settings(&https_address, None, tls_settings);
+                info!(address = %https_address, "HTTPS proxy server listening");
             }
 
             server.add_service(proxy_service);
-
             server.run_forever()
         }
     }

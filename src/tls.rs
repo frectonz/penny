@@ -1,7 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use async_trait::async_trait;
 use color_eyre::eyre::{Context, eyre};
+use pingora::tls::ext;
+use pingora::tls::pkey::PKey;
+use pingora::tls::ssl::{NameType, SslRef};
+use pingora::tls::x509::X509;
 use tracing::{debug, info, warn};
 use x509_parser::prelude::*;
 
@@ -131,6 +136,78 @@ impl CertificateStore {
     fn key_path(&self, domain: &str) -> PathBuf {
         self.certs_dir
             .join(format!("{}.key", sanitize_domain(domain)))
+    }
+}
+
+/// Resolves certificates from disk on each TLS handshake via SNI.
+/// This ensures newly provisioned or renewed certificates are picked up
+/// without requiring a restart.
+pub struct DynamicCertificates {
+    cert_store: CertificateStore,
+}
+
+impl DynamicCertificates {
+    pub fn new(cert_store: CertificateStore) -> Self {
+        Self { cert_store }
+    }
+}
+
+#[async_trait]
+impl pingora::listeners::TlsAccept for DynamicCertificates {
+    async fn certificate_callback(&self, ssl: &mut SslRef) {
+        let domain = match ssl.servername(NameType::HOST_NAME) {
+            Some(name) => name.to_owned(),
+            None => {
+                warn!("TLS handshake without SNI hostname");
+                return;
+            }
+        };
+
+        let (cert_path, key_path) = match self.cert_store.get_certificate(&domain) {
+            Some(paths) => paths,
+            None => {
+                warn!(domain = %domain, "no certificate for requested domain");
+                return;
+            }
+        };
+
+        let cert_bytes = match fs::read(&cert_path) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                warn!(domain = %domain, error = %e, "failed to read certificate");
+                return;
+            }
+        };
+        let key_bytes = match fs::read(&key_path) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                warn!(domain = %domain, error = %e, "failed to read private key");
+                return;
+            }
+        };
+
+        let cert = match X509::from_pem(&cert_bytes) {
+            Ok(cert) => cert,
+            Err(e) => {
+                warn!(domain = %domain, error = %e, "failed to parse certificate");
+                return;
+            }
+        };
+        let key = match PKey::private_key_from_pem(&key_bytes) {
+            Ok(key) => key,
+            Err(e) => {
+                warn!(domain = %domain, error = %e, "failed to parse private key");
+                return;
+            }
+        };
+
+        if let Err(e) = ext::ssl_use_certificate(ssl, &cert) {
+            warn!(domain = %domain, error = %e, "failed to set certificate");
+            return;
+        }
+        if let Err(e) = ext::ssl_use_private_key(ssl, &key) {
+            warn!(domain = %domain, error = %e, "failed to set private key");
+        }
     }
 }
 
