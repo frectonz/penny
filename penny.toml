@@ -4,7 +4,7 @@ api_address = "127.0.0.1:3031"
 address = "127.0.0.1:3001"
 wait_period = "1m"
 health_check = "/api/status"
-command = "bun apps/app1.ts"
+command = "bun -e \"Bun.serve({ port: 3001, routes: { '/api/status': new Response('OK from app1') } })\""
 
 ["app2.local"]
 address = "127.0.0.1:3002"
@@ -12,5 +12,5 @@ wait_period = "30s"
 health_check = "/api/status"
 
 ["app2.local".command]
-start = "bun apps/app2.ts"
+start = "bun -e \"Bun.serve({ port: 3002, routes: { '/api/status': new Response('OK from app2') } })\""
 end = "pkill bun"
