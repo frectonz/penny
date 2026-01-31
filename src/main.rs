@@ -23,7 +23,6 @@ use db::SqliteDatabase;
 use proxy::YarpProxy;
 use tls::{CertificateStore, DynamicCertificates};
 
-
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Args {
@@ -190,9 +189,8 @@ fn main() -> color_eyre::Result<()> {
                 let tls_config = tls_config.as_ref().unwrap();
                 let cert_store = CertificateStore::new(&tls_config.certs_dir)?;
                 let dynamic_certs = DynamicCertificates::new(cert_store);
-                let tls_settings = pingora::listeners::tls::TlsSettings::with_callbacks(
-                    Box::new(dynamic_certs),
-                )?;
+                let tls_settings =
+                    pingora::listeners::tls::TlsSettings::with_callbacks(Box::new(dynamic_certs))?;
 
                 proxy_service.add_tls_with_settings(&https_address, None, tls_settings);
                 info!(address = %https_address, "HTTPS proxy server listening");
