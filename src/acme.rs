@@ -14,6 +14,10 @@ use crate::db::SqliteDatabase;
 pub struct AcmeClient {
     account: Account,
     staging: bool,
+    order_poll_interval_secs: u64,
+    order_poll_max_retries: u32,
+    cert_poll_interval_secs: u64,
+    cert_poll_max_retries: u32,
 }
 
 impl AcmeClient {
@@ -36,6 +40,10 @@ impl AcmeClient {
         Ok(Self {
             account,
             staging: config.staging,
+            order_poll_interval_secs: config.order_poll_interval_secs,
+            order_poll_max_retries: config.order_poll_max_retries,
+            cert_poll_interval_secs: config.cert_poll_interval_secs,
+            cert_poll_max_retries: config.cert_poll_max_retries,
         })
     }
 
@@ -161,9 +169,12 @@ impl AcmeClient {
 
         // Wait for order to become ready
         let mut tries = 0;
-        let max_tries = 20;
+        let max_tries = self.order_poll_max_retries;
         let _state = loop {
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(
+                self.order_poll_interval_secs,
+            ))
+            .await;
             let state = order.refresh().await.wrap_err("failed to refresh order")?;
 
             debug!(status = ?state.status, tries = tries, "checking order status");
@@ -224,7 +235,7 @@ impl AcmeClient {
         // Wait for certificate
         let mut tries = 0;
         let cert_chain_pem = loop {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(self.cert_poll_interval_secs)).await;
 
             match order
                 .certificate()
@@ -234,7 +245,7 @@ impl AcmeClient {
                 Some(cert) => break cert,
                 None => {
                     tries += 1;
-                    if tries >= 10 {
+                    if tries >= self.cert_poll_max_retries {
                         return Err(eyre!("certificate not ready in time"));
                     }
                 }

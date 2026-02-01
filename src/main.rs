@@ -16,7 +16,7 @@ use color_eyre::eyre::Context;
 use tracing::{error, info, warn};
 
 use acme::AcmeClient;
-use api::create_api_router;
+use api::{PaginationConfig, create_api_router};
 use challenge::{ChallengeStore, create_challenge_store};
 use config::{Config, TlsConfig};
 use db::SqliteDatabase;
@@ -64,9 +64,13 @@ enum Command {
     },
 }
 
-async fn setup_api_server(api_address: Option<std::net::SocketAddr>, collector: SqliteDatabase) {
+async fn setup_api_server(
+    api_address: Option<std::net::SocketAddr>,
+    collector: SqliteDatabase,
+    pagination_config: PaginationConfig,
+) {
     if let Some(api_address) = api_address {
-        let router = create_api_router(collector);
+        let router = create_api_router(collector, pagination_config);
         let listener = tokio::net::TcpListener::bind(api_address).await.unwrap();
         info!(address = %api_address, "API server listening");
         tokio::spawn(async move {
@@ -100,7 +104,11 @@ async fn setup(
     no_tls: bool,
 ) -> color_eyre::Result<(SqliteDatabase, ChallengeStore)> {
     let collector = SqliteDatabase::new(&config.database_url).await?;
-    setup_api_server(config.api_address, collector.clone()).await;
+    let pagination_config = PaginationConfig {
+        default_limit: config.default_page_limit,
+        max_limit: config.max_page_limit,
+    };
+    setup_api_server(config.api_address, collector.clone(), pagination_config).await;
     let challenge_store = create_challenge_store();
 
     if let Some(tls_config) = &config.tls
@@ -243,8 +251,8 @@ async fn renewal_loop(
     challenge_store: ChallengeStore,
     tls_config: TlsConfig,
 ) {
-    // Check for renewal every 12 hours
-    let check_interval = std::time::Duration::from_secs(12 * 60 * 60);
+    let check_interval =
+        std::time::Duration::from_secs(tls_config.renewal_check_interval_hours * 60 * 60);
 
     loop {
         tokio::time::sleep(check_interval).await;

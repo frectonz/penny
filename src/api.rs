@@ -1,7 +1,7 @@
 use axum::extract::{Query, State};
 use axum::middleware;
 use axum::routing::get;
-use axum::{Json, Router};
+use axum::{Extension, Json, Router};
 use serde::Serialize;
 use tower_http::cors::{Any, CorsLayer};
 
@@ -11,6 +11,12 @@ use crate::reporter::{
     AppOverview, AppRun, PaginatedResponse, PaginationParams, Reporter, TimeRange, TotalOverview,
 };
 use crate::types::{Host, RunId};
+
+#[derive(Debug, Clone)]
+pub struct PaginationConfig {
+    pub default_limit: u32,
+    pub max_limit: u32,
+}
 
 #[derive(rust_embed::RustEmbed)]
 #[folder = "ui/dist"]
@@ -94,6 +100,7 @@ struct AppRunsQuery {
 
 async fn app_runs_handler<R: Reporter>(
     State(reporter): State<R>,
+    Extension(pagination_config): Extension<PaginationConfig>,
     axum::extract::Path(host): axum::extract::Path<String>,
     Query(query): Query<AppRunsQuery>,
 ) -> Json<PaginatedResponse<AppRun>> {
@@ -106,9 +113,14 @@ async fn app_runs_handler<R: Reporter>(
         None
     };
 
+    let limit = query
+        .limit
+        .unwrap_or(pagination_config.default_limit)
+        .min(pagination_config.max_limit);
+
     let pagination = PaginationParams {
         cursor: query.cursor,
-        limit: query.limit,
+        limit: Some(limit),
     };
 
     Json(reporter.app_runs(&Host(host), time_range, pagination).await)
@@ -126,7 +138,7 @@ async fn run_logs_handler<R: Reporter>(
     }
 }
 
-pub fn create_api_router<R: Reporter>(reporter: R) -> Router {
+pub fn create_api_router<R: Reporter>(reporter: R, pagination_config: PaginationConfig) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -143,6 +155,7 @@ pub fn create_api_router<R: Reporter>(reporter: R) -> Router {
         .route("/api/app-overview/{host}", get(app_overview_handler::<R>))
         .route("/api/app-runs/{host}", get(app_runs_handler::<R>))
         .route("/api/run-logs/{run_id}", get(run_logs_handler::<R>))
+        .layer(Extension(pagination_config))
         .layer(middleware::from_fn(auth_middleware))
         .with_state(reporter);
 

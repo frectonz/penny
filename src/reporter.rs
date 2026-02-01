@@ -344,7 +344,7 @@ impl Reporter for SqliteDatabase {
         pagination: PaginationParams,
     ) -> PaginatedResponse<AppRun> {
         let time_range = time_range.unwrap_or_default();
-        let limit = pagination.limit.unwrap_or(20).min(100) as i64;
+        let limit = pagination.limit.unwrap_or(20) as i64;
         let fetch_limit = limit + 1; // Fetch one extra to detect if more pages exist
 
         let query = r#"

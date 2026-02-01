@@ -30,6 +30,11 @@ pub struct App {
     #[serde(default = "default_stop_timeout")]
     pub stop_timeout: SignedDuration,
 
+    #[serde(default = "default_health_check_initial_backoff_ms")]
+    pub health_check_initial_backoff_ms: u64,
+    #[serde(default = "default_health_check_max_backoff_secs")]
+    pub health_check_max_backoff_secs: u64,
+
     #[serde(skip)]
     pub kill_task: Option<tokio::task::JoinHandle<()>>,
 }
@@ -44,6 +49,14 @@ pub fn default_start_timeout() -> SignedDuration {
 
 pub fn default_stop_timeout() -> SignedDuration {
     SignedDuration::from_secs(30)
+}
+
+fn default_health_check_initial_backoff_ms() -> u64 {
+    10
+}
+
+fn default_health_check_max_backoff_secs() -> u64 {
+    2
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -287,9 +300,11 @@ impl App {
 
     #[instrument(skip(self), fields(timeout = ?self.start_timeout))]
     pub async fn wait_for_running(&self) -> Result<(), pingora::time::Elapsed> {
-        let strategy = tokio_retry::strategy::ExponentialBackoff::from_millis(10)
-            .max_delay(Duration::from_secs(2))
-            .map(tokio_retry::strategy::jitter);
+        let strategy = tokio_retry::strategy::ExponentialBackoff::from_millis(
+            self.health_check_initial_backoff_ms,
+        )
+        .max_delay(Duration::from_secs(self.health_check_max_backoff_secs))
+        .map(tokio_retry::strategy::jitter);
 
         debug!("waiting for app to become ready");
         let wait_for_running = tokio_retry::Retry::spawn(strategy, async || -> Result<(), ()> {
@@ -314,9 +329,11 @@ impl App {
 
     #[instrument(skip(self), fields(timeout = ?self.start_timeout))]
     pub async fn wait_for_stopped(&self) -> Result<(), pingora::time::Elapsed> {
-        let strategy = tokio_retry::strategy::ExponentialBackoff::from_millis(10)
-            .max_delay(Duration::from_secs(2))
-            .map(tokio_retry::strategy::jitter);
+        let strategy = tokio_retry::strategy::ExponentialBackoff::from_millis(
+            self.health_check_initial_backoff_ms,
+        )
+        .max_delay(Duration::from_secs(self.health_check_max_backoff_secs))
+        .map(tokio_retry::strategy::jitter);
 
         debug!("waiting for app to stop");
         let wait_for_stopping = tokio_retry::Retry::spawn(strategy, async || -> Result<(), ()> {
@@ -445,6 +462,26 @@ pub struct TlsConfig {
     /// Days before expiry to renew certificates.
     #[serde(default = "default_renewal_days")]
     pub renewal_days: u32,
+
+    /// Hours between certificate renewal checks.
+    #[serde(default = "default_renewal_check_interval_hours")]
+    pub renewal_check_interval_hours: u64,
+
+    /// Seconds between order status poll attempts.
+    #[serde(default = "default_order_poll_interval_secs")]
+    pub order_poll_interval_secs: u64,
+
+    /// Maximum number of order status poll retries.
+    #[serde(default = "default_order_poll_max_retries")]
+    pub order_poll_max_retries: u32,
+
+    /// Seconds between certificate readiness poll attempts.
+    #[serde(default = "default_cert_poll_interval_secs")]
+    pub cert_poll_interval_secs: u64,
+
+    /// Maximum number of certificate readiness poll retries.
+    #[serde(default = "default_cert_poll_max_retries")]
+    pub cert_poll_max_retries: u32,
 }
 
 fn default_certs_dir() -> PathBuf {
@@ -453,6 +490,26 @@ fn default_certs_dir() -> PathBuf {
 
 fn default_renewal_days() -> u32 {
     30
+}
+
+fn default_renewal_check_interval_hours() -> u64 {
+    12
+}
+
+fn default_order_poll_interval_secs() -> u64 {
+    2
+}
+
+fn default_order_poll_max_retries() -> u32 {
+    20
+}
+
+fn default_cert_poll_interval_secs() -> u64 {
+    1
+}
+
+fn default_cert_poll_max_retries() -> u32 {
+    10
 }
 
 #[derive(Debug, Deserialize)]
@@ -467,12 +524,28 @@ pub struct Config {
     #[serde(default)]
     pub tls: Option<TlsConfig>,
 
+    /// Default page size for paginated API responses.
+    #[serde(default = "default_page_limit")]
+    pub default_page_limit: u32,
+
+    /// Maximum allowed page size for paginated API responses.
+    #[serde(default = "default_max_page_limit")]
+    pub max_page_limit: u32,
+
     #[serde(flatten, deserialize_with = "deserialize_apps")]
     pub apps: HashMap<String, Arc<RwLock<App>>>,
 }
 
 pub fn default_database_url() -> String {
     "sqlite://penny.db".to_owned()
+}
+
+fn default_page_limit() -> u32 {
+    20
+}
+
+fn default_max_page_limit() -> u32 {
+    100
 }
 
 impl Config {
