@@ -2007,7 +2007,6 @@ dependencies = [
  "instant-acme",
  "jiff",
  "mime_guess",
- "once_cell",
  "pem",
  "pingora",
  "rcgen",

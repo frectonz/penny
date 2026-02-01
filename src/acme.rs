@@ -10,14 +10,6 @@ use crate::challenge::{ChallengeStore, add_challenge, remove_challenge};
 use crate::config::TlsConfig;
 use crate::db::SqliteDatabase;
 
-/// A pending HTTP-01 challenge that needs to be completed.
-#[allow(dead_code)]
-pub struct PendingChallenge {
-    pub domain: String,
-    pub token: String,
-    pub key_authorization: String,
-}
-
 /// ACME client for obtaining and managing certificates.
 pub struct AcmeClient {
     account: Account,
@@ -120,7 +112,7 @@ impl AcmeClient {
             .await
             .wrap_err("failed to get authorizations")?;
 
-        let mut challenges_to_complete = Vec::new();
+        let mut pending_tokens = Vec::new();
 
         for auth in &authorizations {
             match auth.status {
@@ -136,28 +128,17 @@ impl AcmeClient {
                 }
             }
 
-            // Find HTTP-01 challenge
             let challenge = auth
                 .challenges
                 .iter()
                 .find(|c| c.r#type == ChallengeType::Http01)
                 .ok_or_else(|| eyre!("no HTTP-01 challenge found"))?;
 
-            let domain = match &auth.identifier {
-                Identifier::Dns(domain) => domain.clone(),
-            };
-
             let token = challenge.token.clone();
             let key_auth = order.key_authorization(challenge).as_str().to_owned();
 
-            // Add challenge to store so HTTP server can respond
-            add_challenge(challenge_store, token.clone(), key_auth.clone()).await;
-
-            challenges_to_complete.push(PendingChallenge {
-                domain,
-                token,
-                key_authorization: key_auth,
-            });
+            add_challenge(challenge_store, token.clone(), key_auth).await;
+            pending_tokens.push(token);
         }
 
         // Set challenges ready (tell ACME server we're ready)
@@ -190,9 +171,8 @@ impl AcmeClient {
             match state.status {
                 OrderStatus::Ready => break state,
                 OrderStatus::Invalid => {
-                    // Clean up challenges
-                    for challenge in &challenges_to_complete {
-                        remove_challenge(challenge_store, &challenge.token).await;
+                    for token in &pending_tokens {
+                        remove_challenge(challenge_store, token).await;
                     }
                     return Err(eyre!("order became invalid"));
                 }
@@ -200,9 +180,8 @@ impl AcmeClient {
                 OrderStatus::Pending => {
                     tries += 1;
                     if tries >= max_tries {
-                        // Clean up challenges
-                        for challenge in &challenges_to_complete {
-                            remove_challenge(challenge_store, &challenge.token).await;
+                        for token in &pending_tokens {
+                            remove_challenge(challenge_store, token).await;
                         }
                         return Err(eyre!("order did not become ready in time"));
                     }
@@ -210,9 +189,8 @@ impl AcmeClient {
                 OrderStatus::Processing => {
                     tries += 1;
                     if tries >= max_tries {
-                        // Clean up challenges
-                        for challenge in &challenges_to_complete {
-                            remove_challenge(challenge_store, &challenge.token).await;
+                        for token in &pending_tokens {
+                            remove_challenge(challenge_store, token).await;
                         }
                         return Err(eyre!("order processing timed out"));
                     }
@@ -220,9 +198,8 @@ impl AcmeClient {
             }
         };
 
-        // Clean up challenges
-        for challenge in &challenges_to_complete {
-            remove_challenge(challenge_store, &challenge.token).await;
+        for token in &pending_tokens {
+            remove_challenge(challenge_store, token).await;
         }
 
         // Generate CSR

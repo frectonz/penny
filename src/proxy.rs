@@ -37,9 +37,7 @@ async fn respond_to_acme_challenge(
     resp.insert_header(http::header::CONTENT_TYPE, "text/plain")?;
     resp.insert_header(http::header::CONTENT_LENGTH, key_auth.len().to_string())?;
 
-    // Write header (false = not end of stream, body follows)
     session.write_response_header(Box::new(resp), false).await?;
-    // Write body (true = end of stream)
     session
         .write_response_body(Some(Bytes::from(key_auth.to_owned())), true)
         .await?;

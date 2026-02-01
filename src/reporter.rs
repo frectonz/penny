@@ -12,6 +12,16 @@ pub struct TimeRange {
     pub end: Option<i64>,
 }
 
+impl TimeRange {
+    pub fn into_option(self) -> Option<Self> {
+        if self.start.is_some() || self.end.is_some() {
+            Some(self)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PaginationParams {
     pub cursor: Option<i64>,

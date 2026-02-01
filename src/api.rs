@@ -57,11 +57,7 @@ async fn total_overview_handler<R: Reporter>(
     State(reporter): State<R>,
     Query(time_range): Query<TimeRange>,
 ) -> Json<TotalOverview> {
-    let time_range = if time_range.start.is_some() || time_range.end.is_some() {
-        Some(time_range)
-    } else {
-        None
-    };
+    let time_range = time_range.into_option();
     Json(reporter.total_overview(time_range).await)
 }
 
@@ -69,11 +65,7 @@ async fn apps_overview_handler<R: Reporter>(
     State(reporter): State<R>,
     Query(time_range): Query<TimeRange>,
 ) -> Json<Vec<AppOverview>> {
-    let time_range = if time_range.start.is_some() || time_range.end.is_some() {
-        Some(time_range)
-    } else {
-        None
-    };
+    let time_range = time_range.into_option();
     Json(reporter.apps_overview(time_range).await)
 }
 
@@ -84,11 +76,7 @@ async fn app_overview_handler<R: Reporter>(
 ) -> impl axum::response::IntoResponse {
     use axum::response::IntoResponse;
 
-    let time_range = if time_range.start.is_some() || time_range.end.is_some() {
-        Some(time_range)
-    } else {
-        None
-    };
+    let time_range = time_range.into_option();
 
     match reporter.app_overview(&Host(host), time_range).await {
         Some(overview) => Json(overview).into_response(),

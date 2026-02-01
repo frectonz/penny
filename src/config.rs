@@ -84,17 +84,12 @@ impl FromStr for CommandSpec {
     type Err = shell_words::ParseError;
 
     fn from_str(command: &str) -> Result<Self, Self::Err> {
-        let mut words = shell_words::split(command)?;
-
-        words.reverse();
-
-        let program = words.pop().unwrap_or_else(|| command.to_owned());
-
-        words.reverse();
+        let mut words = shell_words::split(command)?.into_iter();
+        let program = words.next().unwrap_or_else(|| command.to_owned());
 
         Ok(Self {
             program,
-            args: words,
+            args: words.collect(),
             collect_stdout: None,
             collect_stderr: None,
             child: None,
@@ -245,7 +240,7 @@ impl AppCommand {
         debug!("starting app command");
         let start = match self {
             AppCommand::Start(start) => start.as_mut(),
-            AppCommand::StartEnd { start, end: _ } => start.as_mut(),
+            AppCommand::StartEnd { start, .. } => start.as_mut(),
         };
 
         start.run(opts);
@@ -264,8 +259,8 @@ impl AppCommand {
     }
 }
 
-static HTTP: once_cell::sync::Lazy<reqwest::Client> =
-    once_cell::sync::Lazy::new(reqwest::Client::new);
+static HTTP: std::sync::LazyLock<reqwest::Client> =
+    std::sync::LazyLock::new(reqwest::Client::new);
 
 impl App {
     #[instrument(skip(self), fields(address = %self.address, health_check = %self.health_check))]

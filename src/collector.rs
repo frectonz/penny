@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 
-use jiff::tz::TimeZone;
-use jiff::{Timestamp, Zoned};
+use jiff::Timestamp;
 use tracing::error;
 
 use crate::db::SqliteDatabase;
@@ -23,9 +22,7 @@ pub trait Collector: Sync + Send + Clone + Debug + 'static {
 impl Collector for SqliteDatabase {
     async fn app_started(&self, host: &Host) -> RunId {
         let run_id = RunId::new();
-        let started_at = Zoned::new(Timestamp::now(), TimeZone::UTC)
-            .timestamp()
-            .as_millisecond();
+        let started_at = Timestamp::now().as_millisecond();
 
         if let Err(e) = sqlx::query("INSERT INTO runs (run_id, host, started_at) VALUES (?, ?, ?)")
             .bind(&run_id.0)
@@ -41,9 +38,7 @@ impl Collector for SqliteDatabase {
     }
 
     async fn app_stopped(&self, host: &Host) {
-        let stopped_at = Zoned::new(Timestamp::now(), TimeZone::UTC)
-            .timestamp()
-            .as_millisecond();
+        let stopped_at = Timestamp::now().as_millisecond();
 
         if let Err(e) = sqlx::query(
             "UPDATE runs SET stopped_at = ? WHERE run_id = (SELECT run_id FROM runs WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1)",
@@ -82,9 +77,7 @@ impl Collector for SqliteDatabase {
     }
 
     async fn append_stdout(&self, run_id: &RunId, line: String) {
-        let timestamp = Zoned::new(Timestamp::now(), TimeZone::UTC)
-            .timestamp()
-            .as_millisecond();
+        let timestamp = Timestamp::now().as_millisecond();
 
         if let Err(e) = sqlx::query("INSERT INTO stdout (run_id, line, timestamp) VALUES (?, ?, ?)")
             .bind(&run_id.0)
@@ -98,9 +91,7 @@ impl Collector for SqliteDatabase {
     }
 
     async fn append_stderr(&self, run_id: &RunId, line: String) {
-        let timestamp = Zoned::new(Timestamp::now(), TimeZone::UTC)
-            .timestamp()
-            .as_millisecond();
+        let timestamp = Timestamp::now().as_millisecond();
 
         if let Err(e) = sqlx::query("INSERT INTO stderr (run_id, line, timestamp) VALUES (?, ?, ?)")
             .bind(&run_id.0)
