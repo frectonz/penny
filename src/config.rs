@@ -259,8 +259,7 @@ impl AppCommand {
     }
 }
 
-static HTTP: std::sync::LazyLock<reqwest::Client> =
-    std::sync::LazyLock::new(reqwest::Client::new);
+static HTTP: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(reqwest::Client::new);
 
 impl App {
     #[instrument(skip(self), fields(address = %self.address, health_check = %self.health_check))]
