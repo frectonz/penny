@@ -15,6 +15,15 @@ Instead of telling penny which address to proxy to, you give it the command to s
 - **Multi-app routing** — Route multiple domains to different backends from a single config file
 - **Single binary** — Dashboard UI embedded in the binary, no external dependencies at runtime
 
+
+## How It Works
+
+<p align="center">
+  <img src="how-it-works.svg" alt="How penny works" width="880">
+</p>
+
+Each request resets the idle timer. As long as traffic keeps coming, the app stays alive. Once traffic stops, penny waits for `wait_period` and then shuts the process down.
+
 ## Quick Start
 
 Create a `penny.toml`:
@@ -144,14 +153,6 @@ penny serve penny.toml --password mysecret
 # or
 PENNY_PASSWORD=mysecret penny serve penny.toml
 ```
-
-## How It Works
-
-<p align="center">
-  <img src="how-it-works.svg" alt="How penny works" width="880">
-</p>
-
-Each request resets the idle timer. As long as traffic keeps coming, the app stays alive. Once traffic stops, penny waits for `wait_period` and then shuts the process down.
 
 ## Building from Source
 
