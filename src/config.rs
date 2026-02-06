@@ -517,6 +517,9 @@ pub struct Config {
     #[serde(default)]
     pub api_address: Option<SocketAddr>,
 
+    #[serde(default)]
+    pub api_domain: Option<String>,
+
     #[serde(default = "default_database_url")]
     pub database_url: String,
 
@@ -549,9 +552,28 @@ fn default_max_page_limit() -> u32 {
 }
 
 impl Config {
+    pub fn tls_domains(&self) -> Vec<String> {
+        let mut domains: Vec<String> = self.apps.keys().cloned().collect();
+        if let Some(api_domain) = &self.api_domain
+            && self.api_address.is_some()
+        {
+            domains.push(api_domain.clone());
+        }
+        domains
+    }
+
     pub async fn get_proxy_context(&self, host: &str) -> Option<ProxyContext> {
-        let app = self.apps.get(host)?.clone();
-        let proxy_context = ProxyContext::new(host, app).await;
-        Some(proxy_context)
+        if let Some(app) = self.apps.get(host) {
+            return Some(ProxyContext::new(host, app.clone()).await);
+        }
+
+        if let Some(api_domain) = &self.api_domain
+            && host == api_domain
+            && let Some(api_address) = self.api_address
+        {
+            return Some(ProxyContext::new_api(host, api_address));
+        }
+
+        None
     }
 }

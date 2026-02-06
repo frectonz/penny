@@ -55,7 +55,7 @@ pub fn get_host(session: &pingora::prelude::Session) -> Option<&str> {
 
 pub struct ProxyContext {
     pub host: Host,
-    pub app: Arc<RwLock<App>>,
+    pub app: Option<Arc<RwLock<App>>>,
     pub peer: Box<pingora::prelude::HttpPeer>,
 }
 
@@ -64,7 +64,19 @@ impl ProxyContext {
         let address = app.read().await.address;
 
         Self {
-            app,
+            app: Some(app),
+            host: Host(host.to_owned()),
+            peer: Box::new(pingora::prelude::HttpPeer::new(
+                address,
+                false,
+                host.to_owned(),
+            )),
+        }
+    }
+
+    pub fn new_api(host: &str, address: std::net::SocketAddr) -> Self {
+        Self {
+            app: None,
             host: Host(host.to_owned()),
             peer: Box::new(pingora::prelude::HttpPeer::new(
                 address,
@@ -132,11 +144,10 @@ where
 
         info!(host = %ctx.host, "proxying request");
 
-        App::start_app(&ctx.host, &ctx.app, self.collector.clone()).await?;
-        App::schedule_kill(&ctx.host, &ctx.app, self.collector.clone()).await;
-
-        let address = ctx.app.read().await.address;
-        debug!(host = %ctx.host, upstream = %address, "connecting to upstream");
+        if let Some(ref app) = ctx.app {
+            App::start_app(&ctx.host, app, self.collector.clone()).await?;
+            App::schedule_kill(&ctx.host, app, self.collector.clone()).await;
+        }
 
         Ok(ctx.peer.clone())
     }

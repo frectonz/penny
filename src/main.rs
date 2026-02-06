@@ -117,7 +117,7 @@ async fn setup(
         && tls_config.enabled
         && !no_tls
     {
-        let domains: Vec<String> = config.apps.keys().cloned().collect();
+        let domains = config.tls_domains();
         setup_tls(
             domains,
             collector.clone(),
@@ -176,6 +176,14 @@ fn main() -> color_eyre::Result<()> {
                 );
             }
 
+            if let Some(api_domain) = &config.api_domain {
+                if config.api_address.is_some() {
+                    info!(api_domain = %api_domain, "API domain configured for proxy routing");
+                } else {
+                    warn!(api_domain = %api_domain, "api_domain is set but api_address is not configured");
+                }
+            }
+
             let mut server =
                 pingora::server::Server::new(None).context("creating pingora server")?;
             server.bootstrap();
@@ -185,7 +193,7 @@ fn main() -> color_eyre::Result<()> {
 
             let tls_enabled = config.tls.as_ref().is_some_and(|t| t.enabled) && !no_tls;
             let tls_config = config.tls.clone();
-            let domains: Vec<String> = config.apps.keys().cloned().collect();
+            let domains = config.tls_domains();
 
             let proxy = YarpProxy::new(config, collector, challenge_store);
             let mut proxy_service =
