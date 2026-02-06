@@ -79,24 +79,26 @@ async fn setup_api_server(
     }
 }
 
-async fn setup_tls(
+fn setup_tls(
     domains: Vec<String>,
     collector: SqliteDatabase,
     challenge_store: ChallengeStore,
     tls_config: TlsConfig,
-) -> color_eyre::Result<()> {
+) {
     if domains.is_empty() {
         warn!("TLS enabled but no apps configured, skipping certificate provisioning");
-        return Ok(());
+        return;
     }
 
-    provision_certificates(&domains, &collector, &challenge_store, &tls_config).await?;
-
     tokio::spawn(async move {
+        if let Err(e) =
+            provision_certificates(&domains, &collector, &challenge_store, &tls_config).await
+        {
+            error!(error = %e, "initial certificate provisioning failed");
+        }
+
         renewal_loop(domains, collector, challenge_store, tls_config).await;
     });
-
-    Ok(())
 }
 
 async fn setup(
@@ -121,8 +123,7 @@ async fn setup(
             collector.clone(),
             challenge_store.clone(),
             tls_config.clone(),
-        )
-        .await?;
+        );
     }
 
     Ok((collector, challenge_store))

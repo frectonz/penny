@@ -9,7 +9,7 @@ async-trait = "0.1.89"
 bytes = "1.10"
 axum = "0.8.8"
 base64 = "0.22.1"
-clap = { version = "4.5.53", features = ["derive", "env"] }
+clap = { version = "4.5.53", features = ["derive", "env", "color"] }
 color-eyre = "0.6.5"
 http = "1.4.0"
 jiff = { version = "0.2.16", features = ["serde"] }
