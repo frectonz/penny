@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 340" font-family="'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, monospace">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#a1a1a1"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#22c55e"/>
+    </marker>
+    <marker id="ar" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#dc2626"/>
+    </marker>
+    <pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0L0 0 0 40" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="980" height="340" fill="#0a0a0a" rx="6"/>
+  <rect width="980" height="340" fill="url(#g)" rx="6"/>
+
+  <!-- ==================== TITLE ==================== -->
+  <g transform="translate(418,10)">
+    <svg width="22" height="22" viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="45" stroke="#f97316" stroke-width="6" fill="none"/>
+      <circle cx="50" cy="50" r="35" stroke="#f97316" stroke-width="3" fill="none"/>
+      <text x="50" y="58" text-anchor="middle" fill="#f97316" font-size="36" font-weight="bold" font-family="system-ui,sans-serif">P</text>
+    </svg>
+  </g>
+  <text x="448" y="25" fill="#fafafa" font-size="12" font-weight="600" letter-spacing="0.1em">PENNY</text>
+  <text x="504" y="25" fill="#a1a1a1" font-size="9" letter-spacing="0.04em">HOW IT WORKS</text>
+
+  <!-- ==================== LEFT: Browser ==================== -->
+  <rect x="40" y="96" width="108" height="76" rx="4" fill="#0f0f0f" stroke="#262626" stroke-width="1"/>
+  <rect x="40" y="96" width="108" height="14" rx="4" fill="#1a1a1a"/>
+  <rect x="40" y="106" width="108" height="4" fill="#1a1a1a"/>
+  <circle cx="51" cy="103" r="2.5" fill="#dc2626"/>
+  <circle cx="60" cy="103" r="2.5" fill="#f97316"/>
+  <circle cx="69" cy="103" r="2.5" fill="#22c55e"/>
+  <rect x="52" y="118" width="84" height="5" rx="1.5" fill="#1a1a1a"/>
+  <rect x="52" y="128" width="64" height="5" rx="1.5" fill="#1a1a1a"/>
+  <rect x="52" y="138" width="74" height="5" rx="1.5" fill="#1a1a1a"/>
+  <rect x="52" y="148" width="56" height="5" rx="1.5" fill="#1a1a1a"/>
+  <text x="94" y="188" text-anchor="middle" fill="#a1a1a1" font-size="9">USER</text>
+
+  <!-- Arrow: User → Penny -->
+  <line x1="148" y1="134" x2="218" y2="134" stroke="#a1a1a1" stroke-width="1" marker-end="url(#a)"/>
+  <text x="183" y="128" text-anchor="middle" fill="#a1a1a1" font-size="8">HTTPS</text>
+
+  <!-- ==================== CENTER: Penny Proxy ==================== -->
+  <rect x="224" y="60" width="250" height="196" rx="4" fill="#0f0f0f" stroke="#f97316" stroke-width="1.5"/>
+
+  <!-- Header -->
+  <rect x="224" y="60" width="250" height="26" rx="4" fill="#1a1a1a"/>
+  <rect x="224" y="78" width="250" height="8" fill="#1a1a1a"/>
+  <text x="349" y="77" text-anchor="middle" fill="#f97316" font-size="9" font-weight="600" letter-spacing="0.08em">PENNY PROXY</text>
+
+  <!-- Capabilities -->
+  <rect x="238" y="98" width="222" height="30" rx="3" fill="#0a0a0a" stroke="#262626" stroke-width="0.75"/>
+  <text x="349" y="117" text-anchor="middle" fill="#fafafa" font-size="9">ROUTE BY HOST HEADER</text>
+
+  <rect x="238" y="136" width="222" height="30" rx="3" fill="#0a0a0a" stroke="#262626" stroke-width="0.75"/>
+  <text x="349" y="155" text-anchor="middle" fill="#f97316" font-size="9">START &amp; STOP ON DEMAND</text>
+
+  <rect x="238" y="174" width="222" height="30" rx="3" fill="#0a0a0a" stroke="#262626" stroke-width="0.75"/>
+  <text x="349" y="193" text-anchor="middle" fill="#fafafa" font-size="9">AUTO TLS VIA LET'S ENCRYPT</text>
+
+  <rect x="238" y="212" width="222" height="30" rx="3" fill="#0a0a0a" stroke="#262626" stroke-width="0.75"/>
+  <text x="349" y="231" text-anchor="middle" fill="#fafafa" font-size="9">DASHBOARD &amp; LOGS</text>
+
+  <!-- ==================== RIGHT: Apps ==================== -->
+
+  <!-- Arrow: Penny → App1 -->
+  <line x1="474" y1="88" x2="538" y2="88" stroke="#22c55e" stroke-width="1" marker-end="url(#ag)"/>
+  <text x="506" y="82" text-anchor="middle" fill="#22c55e" font-size="8">PROXY</text>
+
+  <!-- App 1 (running) -->
+  <rect x="542" y="60" width="180" height="56" rx="4" fill="#0f0f0f" stroke="#22c55e" stroke-width="1"/>
+  <circle cx="558" cy="82" r="4" fill="#22c55e"/>
+  <text x="570" y="86" fill="#22c55e" font-size="9" font-weight="600">app1.example.com</text>
+  <text x="570" y="104" fill="#a1a1a1" font-size="8">AWAKE · :3001</text>
+
+  <!-- App 2 (idle) -->
+  <rect x="542" y="126" width="180" height="56" rx="4" fill="#0f0f0f" stroke="#262626" stroke-width="1" stroke-dasharray="4 3"/>
+  <circle cx="558" cy="148" r="4" fill="#3a3a3a"/>
+  <text x="570" y="152" fill="#a1a1a1" font-size="9">app2.example.com</text>
+  <text x="570" y="170" fill="#a1a1a1" font-size="8">IDLE · STOPPED</text>
+
+  <!-- App 3 (idle) -->
+  <rect x="542" y="200" width="180" height="56" rx="4" fill="#0f0f0f" stroke="#262626" stroke-width="1" stroke-dasharray="4 3"/>
+  <circle cx="558" cy="222" r="4" fill="#3a3a3a"/>
+  <text x="570" y="226" fill="#a1a1a1" font-size="9">app3.example.com</text>
+  <text x="570" y="244" fill="#a1a1a1" font-size="8">IDLE · STOPPED</text>
+
+  <!-- ==================== Kill arrow from active app ==================== -->
+  <line x1="722" y1="88" x2="808" y2="88" stroke="#dc2626" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+  <text x="765" y="80" text-anchor="middle" fill="#dc2626" font-size="7" font-weight="600">AFTER wait_period</text>
+
+  <!-- App 1 as stopped (same style as idle apps) -->
+  <rect x="812" y="60" width="130" height="56" rx="4" fill="#0f0f0f" stroke="#262626" stroke-width="1" stroke-dasharray="4 3"/>
+  <circle cx="828" cy="82" r="4" fill="#3a3a3a"/>
+  <text x="840" y="86" fill="#a1a1a1" font-size="8">app1.example.com</text>
+  <text x="840" y="100" fill="#a1a1a1" font-size="7">IDLE · STOPPED</text>
+
+  <!-- ==================== BOTTOM: Lifecycle ==================== -->
+  <line x1="40" y1="300" x2="920" y2="300" stroke="#262626" stroke-width="0.5"/>
+  <circle cx="152" cy="300" r="2" fill="#a1a1a1"/>
+  <circle cx="384" cy="300" r="2" fill="#f97316"/>
+  <circle cx="616" cy="300" r="2" fill="#22c55e"/>
+  <circle cx="848" cy="300" r="2" fill="#dc2626"/>
+  <text x="152" y="318" text-anchor="middle" fill="#a1a1a1" font-size="7" letter-spacing="0.04em">REQUEST ARRIVES</text>
+  <text x="384" y="318" text-anchor="middle" fill="#f97316" font-size="7" letter-spacing="0.04em">PENNY STARTS APP</text>
+  <text x="616" y="318" text-anchor="middle" fill="#22c55e" font-size="7" letter-spacing="0.04em">TRAFFIC PROXIED</text>
+  <text x="848" y="318" text-anchor="middle" fill="#dc2626" font-size="7" letter-spacing="0.04em">IDLE → KILLED</text>
+</svg>
