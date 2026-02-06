@@ -78,7 +78,7 @@ impl CertificateStore {
         match self.get_expiry(&cert_path) {
             Ok(expiry) => {
                 let now = jiff::Timestamp::now();
-                let renewal_threshold = jiff::Span::new().days(renewal_days as i64);
+                let renewal_threshold = jiff::Span::new().hours(renewal_days as i64 * 24);
 
                 match now.checked_add(renewal_threshold) {
                     Ok(threshold) => {
