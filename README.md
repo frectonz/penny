@@ -12,6 +12,7 @@ Instead of telling penny which address to proxy to, you give it the command to s
 - **Automatic TLS** — Let's Encrypt certificates provisioned and renewed automatically
 - **Built-in dashboard** — Monitor app runs, uptime, failure rates, and captured logs
 - **Health checks** — Configurable endpoints with exponential backoff
+- **Cold start loading page** — Opt-in friendly loading page for browser users during cold starts instead of a hanging connection
 - **Multi-app routing** — Route multiple domains to different backends from a single config file
 - **Single binary** — Dashboard UI embedded in the binary, no external dependencies at runtime
 
@@ -66,6 +67,7 @@ address = "127.0.0.1:3001"
 command = "node server.js"
 health_check = "/"
 wait_period = "10m"
+# cold_start_page = false
 # start_timeout = "30s"
 # stop_timeout = "30s"
 # health_check_initial_backoff_ms = 10
@@ -96,6 +98,7 @@ wait_period = "30m"
 | `wait_period` | `10m` | How long to wait after the last request before killing the process |
 | `start_timeout` | `30s` | Max time to wait for the app to become healthy |
 | `stop_timeout` | `30s` | Max time to wait for the app to stop |
+| `cold_start_page` | `false` | Show a loading page to browser users during cold starts instead of blocking the connection |
 | `health_check_initial_backoff_ms` | `10` | Initial retry delay for health checks |
 | `health_check_max_backoff_secs` | `2` | Max retry delay for health checks |
 

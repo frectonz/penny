@@ -35,6 +35,12 @@ pub struct App {
     #[serde(default = "default_health_check_max_backoff_secs")]
     pub health_check_max_backoff_secs: u64,
 
+    #[serde(default)]
+    pub cold_start_page: bool,
+
+    #[serde(skip)]
+    pub confirmed_healthy: bool,
+
     #[serde(skip)]
     pub kill_task: Option<tokio::task::JoinHandle<()>>,
 }
@@ -366,7 +372,20 @@ impl App {
 
         // Fast path: if child process is already running, skip health check
         if guard.command.is_child_running() {
-            debug!("child process already running, skipping health check");
+            if !guard.cold_start_page || guard.confirmed_healthy {
+                debug!("child process already running, skipping health check");
+                return Ok(());
+            }
+            // cold_start_page app started by loading page flow, not yet confirmed healthy
+            drop(guard);
+            if app.read().await.wait_for_running().await.is_err() {
+                error!("failed to start app within timeout");
+                return Err(pingora::Error::explain(
+                    pingora::ErrorType::ConnectError,
+                    "failed to start app",
+                ));
+            }
+            app.write().await.confirmed_healthy = true;
             return Ok(());
         }
 
@@ -393,12 +412,68 @@ impl App {
                     "failed to start app",
                 ));
             }
+            app.write().await.confirmed_healthy = true;
         } else {
             let address = guard.address;
             debug!(%address, "app already running");
         }
 
         Ok(())
+    }
+
+    #[instrument(skip(app))]
+    pub async fn begin_start_app(
+        host: &Host,
+        app: &Arc<RwLock<App>>,
+        collector: impl Collector,
+    ) -> pingora::Result<bool> {
+        let mut guard = app.write().await;
+
+        // Fast path: child running and confirmed healthy
+        if guard.command.is_child_running() && guard.confirmed_healthy {
+            debug!("child process running and confirmed healthy");
+            return Ok(true);
+        }
+
+        // Child running but not yet confirmed healthy
+        if guard.command.is_child_running() {
+            debug!("child process running but not yet confirmed healthy");
+            return Ok(false);
+        }
+
+        // No child running, check if externally managed process is healthy
+        if guard.is_running().await {
+            debug!("externally managed process is healthy");
+            guard.confirmed_healthy = true;
+            return Ok(true);
+        }
+
+        // Need to start the app
+        let run_id = collector.app_started(host).await;
+        let address = guard.address;
+
+        info!(%address, "app not running, starting it (non-blocking)");
+        guard.command.start(Some(RunOptions {
+            run_id,
+            collector: collector.clone(),
+        }));
+
+        drop(guard);
+
+        // Spawn background task to wait for health and set confirmed_healthy
+        let app = app.clone();
+        let host = host.clone();
+        tokio::spawn(async move {
+            if app.read().await.wait_for_running().await.is_ok() {
+                app.write().await.confirmed_healthy = true;
+                info!(host = %host, "app confirmed healthy in background");
+            } else {
+                error!(host = %host, "app failed to start in background");
+                collector.app_start_failed(&host).await;
+            }
+        });
+
+        Ok(false)
     }
 
     #[instrument(skip(app))]
@@ -421,7 +496,10 @@ impl App {
                 pingora::time::sleep(wait_period).await;
                 info!("wait period elapsed, stopping app");
 
-                app.write().await.command.stop().await;
+                let mut guard = app.write().await;
+                guard.command.stop().await;
+                guard.confirmed_healthy = false;
+                drop(guard);
                 collector.app_stopped(&host).await;
 
                 if app.read().await.wait_for_stopped().await.is_err() {
