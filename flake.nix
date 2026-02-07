@@ -82,7 +82,11 @@
               src = ./ui;
               pnpm = pkgs.pnpm;
               fetcherVersion = 3;
-              hash = "sha256-lE3HeKgyWUmD4IXtj4RxwjFfFv371bjl+0U2s/Zj3SE=";
+              hash =
+                if pkgs.stdenv.isLinux then
+                  "sha256-iFhK9U811SA6l64Sb98h8Hq9stCw3picqvLwvrLx3Ks="
+                else
+                  "sha256-lE3HeKgyWUmD4IXtj4RxwjFfFv371bjl+0U2s/Zj3SE=";
             };
 
             buildPhase = ''
