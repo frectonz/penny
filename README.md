@@ -17,6 +17,7 @@ Instead of telling penny which address to proxy to, you give it the command to s
 - **Automatic TLS** — Let's Encrypt certificates provisioned and renewed automatically
 - **Built-in dashboard** — Monitor app runs, uptime, failure rates, and captured logs
 - **Health checks** — Configurable endpoints with exponential backoff
+- **Eager start on related traffic** — Pre-warm related apps in the background when traffic hits a dependency
 - **Cold start loading page** — Opt-in friendly loading page for browser users during cold starts instead of a hanging connection
 - **Multi-app routing** — Route multiple domains to different backends from a single config file
 - **Single binary** — Dashboard UI embedded in the binary, no external dependencies at runtime
@@ -72,6 +73,7 @@ address = "127.0.0.1:3001"
 command = "node server.js"
 health_check = "/"
 wait_period = "10m"
+also_warm = ["app2.example.com"]
 # cold_start_page = false
 # start_timeout = "30s"
 # stop_timeout = "30s"
@@ -113,6 +115,7 @@ adaptive_wait = true
 | `start_timeout` | `30s` | Max time to wait for the app to become healthy |
 | `stop_timeout` | `30s` | Max time to wait for the app to stop |
 | `cold_start_page` | `false` | Show a loading page to browser users during cold starts instead of blocking the connection |
+| `also_warm` | `[]` | List of other app hostnames to pre-warm when this app receives traffic |
 | `health_check_initial_backoff_ms` | `10` | Initial retry delay for health checks |
 | `health_check_max_backoff_secs` | `2` | Max retry delay for health checks |
 
@@ -159,6 +162,25 @@ high_req_per_hour = 3000
 
 When `adaptive_wait` is enabled, `wait_period` is ignored.
 
+### Eager Start on Related Traffic
+
+Apps can declare relationships so that traffic to one pre-warms another in the background:
+
+```toml
+["api.example.com"]
+address = "127.0.0.1:3001"
+command = "node api.js"
+health_check = "/health"
+also_warm = ["frontend.example.com"]
+
+["frontend.example.com"]
+address = "127.0.0.1:3002"
+command = "node frontend.js"
+health_check = "/"
+```
+
+When a request hits `api.example.com`, penny starts `frontend.example.com` in the background, anticipating it will be needed soon. The warmed app gets its own idle timer — if no direct traffic arrives, it shuts down after its `wait_period` as usual.
+
 ## CLI
 
 ### `penny serve`
@@ -185,6 +207,29 @@ penny check <config> [OPTIONS]
 Options:
   --apps <HOSTS>    Comma-separated list of specific apps to check
 ```
+
+### `penny systemd`
+
+Manage penny as a systemd user service (Linux only). Generates a unit file that wraps `penny serve` in your login shell so your full PATH (nvm, cargo, etc.) is available.
+
+```
+penny systemd install <config> [OPTIONS]
+penny systemd uninstall
+penny systemd status
+penny systemd logs [--follow]
+```
+
+**Install** creates `~/.config/systemd/user/penny.service`, enables and starts it, and runs `loginctl enable-linger` so the service starts at boot without a login session. It accepts the same options as `penny serve`:
+
+```
+Options:
+  --address <ADDR>         HTTP listen address [default: 0.0.0.0:80]
+  --https-address <ADDR>   HTTPS listen address [default: 0.0.0.0:443]
+  --no-tls                 Disable TLS even if configured in the config file
+  --password <PASSWORD>    Password for dashboard access [env: PENNY_PASSWORD]
+```
+
+**Uninstall** stops and removes the service. **Status** and **Logs** are passthroughs to `systemctl` and `journalctl`.
 
 ## Dashboard
 
