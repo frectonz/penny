@@ -260,13 +260,37 @@ where
         if let Some(proxy_ctx) = ctx.as_ref()
             && let Some(app) = &proxy_ctx.app
         {
-            let cold_start_page = app.read().await.cold_start_page;
+            let guard = app.read().await;
+            let cold_start_page = guard.cold_start_page;
+            let also_warm = guard.also_warm.clone();
+            drop(guard);
+
             if cold_start_page && is_browser_navigation(session) {
                 let is_ready =
                     App::begin_start_app(&proxy_ctx.host, app, self.collector.clone()).await?;
                 App::schedule_kill(&proxy_ctx.host, app, self.collector.clone()).await;
                 if !is_ready {
                     return respond_with_loading_page(session, &proxy_ctx.host.0).await;
+                }
+            }
+
+            for hostname in also_warm {
+                if let Some(related_app) = self.config.apps.get(&hostname) {
+                    let related_app = related_app.clone();
+                    let host = Host(hostname.clone());
+                    let collector = self.collector.clone();
+                    tokio::spawn(async move {
+                        info!(host = %host, "warming related app");
+                        if let Err(e) =
+                            App::begin_start_app(&host, &related_app, collector.clone()).await
+                        {
+                            warn!(host = %host, error = %e, "failed to warm related app");
+                            return;
+                        }
+                        App::schedule_kill(&host, &related_app, collector).await;
+                    });
+                } else {
+                    warn!(hostname = %hostname, "also_warm target not found in config");
                 }
             }
         }

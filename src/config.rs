@@ -131,6 +131,9 @@ pub struct App {
     #[serde(default)]
     pub high_req_per_hour: Option<f64>,
 
+    #[serde(default)]
+    pub also_warm: Vec<String>,
+
     #[serde(skip)]
     pub request_tracker: RequestTracker,
 
