@@ -9,6 +9,7 @@ Instead of telling penny which address to proxy to, you give it the command to s
 ## Features
 
 - **On-demand process management** — Servers start on first request, get killed after idle timeout
+- **Adaptive idle timeout** — Opt-in traffic-aware shutdown timing that keeps busy apps alive longer and shuts down idle apps faster
 - **Automatic TLS** — Let's Encrypt certificates provisioned and renewed automatically
 - **Built-in dashboard** — Monitor app runs, uptime, failure rates, and captured logs
 - **Health checks** — Configurable endpoints with exponential backoff
@@ -77,7 +78,11 @@ wait_period = "10m"
 address = "127.0.0.1:3002"
 command = "python app.py"
 health_check = "/health"
-wait_period = "30m"
+adaptive_wait = true
+# min_wait_period = "5m"             # default
+# max_wait_period = "30m"            # default
+# low_req_per_hour = 12              # default
+# high_req_per_hour = 300            # default
 ```
 
 ### Global Options
@@ -96,6 +101,11 @@ wait_period = "30m"
 | `command` | *required* | Shell command to start the app |
 | `health_check` | *required* | HTTP path to check if the app is ready |
 | `wait_period` | `10m` | How long to wait after the last request before killing the process |
+| `adaptive_wait` | `false` | Enable adaptive idle timeout based on traffic patterns (see below) |
+| `min_wait_period` | `5m` | Minimum idle timeout when `adaptive_wait` is enabled |
+| `max_wait_period` | `30m` | Maximum idle timeout when `adaptive_wait` is enabled |
+| `low_req_per_hour` | `12` | Request rate (req/hr) below which the idle timeout stays at `min_wait_period` |
+| `high_req_per_hour` | `300` | Request rate (req/hr) above which the idle timeout stays at `max_wait_period` |
 | `start_timeout` | `30s` | Max time to wait for the app to become healthy |
 | `stop_timeout` | `30s` | Max time to wait for the app to stop |
 | `cold_start_page` | `false` | Show a loading page to browser users during cold starts instead of blocking the connection |
@@ -112,6 +122,38 @@ wait_period = "30m"
 | `certs_dir` | `./certs` | Directory to store certificates |
 | `renewal_days` | `30` | Renew certificates this many days before expiry |
 | `renewal_check_interval_hours` | `12` | How often to check for renewals |
+
+### Adaptive Wait
+
+When `adaptive_wait = true`, penny adjusts the idle timeout based on recent traffic instead of using a fixed `wait_period`. Busier apps stay alive longer; idle apps shut down faster.
+
+It works by computing request rates over two time windows:
+- **Short window (5 min)** — reacts quickly to traffic bursts
+- **Long window (30 min)** — captures sustained traffic patterns
+
+The higher of the two rates is mapped to a wait period between `min_wait_period` and `max_wait_period` using a smooth S-curve (smoothstep). The `low_req_per_hour` and `high_req_per_hour` thresholds control where the curve starts and saturates.
+
+```toml
+# Minimal — just enable it, defaults handle the rest
+["myapp.example.com"]
+address = "127.0.0.1:3001"
+command = "node server.js"
+health_check = "/"
+adaptive_wait = true
+
+# High-traffic API with custom thresholds
+["api.example.com"]
+address = "127.0.0.1:3002"
+command = "python app.py"
+health_check = "/health"
+adaptive_wait = true
+min_wait_period = "5m"
+max_wait_period = "60m"
+low_req_per_hour = 60
+high_req_per_hour = 3000
+```
+
+When `adaptive_wait` is enabled, `wait_period` is ignored.
 
 ## CLI
 
