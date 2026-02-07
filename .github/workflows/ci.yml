@@ -46,3 +46,6 @@ jobs:
 
       - name: Build Rust Project
         run: nix develop -c cargo build --release
+
+      - name: Build Rust Project with Nix
+        run: nix build
