@@ -362,22 +362,28 @@ impl App {
         app: &Arc<RwLock<App>>,
         collector: impl Collector,
     ) -> pingora::Result<()> {
+        let mut guard = app.write().await;
+
         // Fast path: if child process is already running, skip health check
-        if app.write().await.command.is_child_running() {
+        if guard.command.is_child_running() {
             debug!("child process already running, skipping health check");
             return Ok(());
         }
 
         // Slow path: no running child, do health check to confirm app state
-        if !app.read().await.is_running().await {
-            let address = app.read().await.address;
+        let needs_start = !guard.is_running().await;
+
+        if needs_start {
+            let address = guard.address;
             let run_id = collector.app_started(host).await;
 
             info!(%address, "app not running, starting it");
-            app.write().await.command.start(Some(RunOptions {
+            guard.command.start(Some(RunOptions {
                 run_id,
                 collector: collector.clone(),
             }));
+
+            drop(guard);
 
             if app.read().await.wait_for_running().await.is_err() {
                 error!("failed to start app within timeout");
@@ -388,7 +394,7 @@ impl App {
                 ));
             }
         } else {
-            let address = app.read().await.address;
+            let address = guard.address;
             debug!(%address, "app already running");
         }
 
