@@ -8,6 +8,7 @@ mod config;
 mod db;
 mod proxy;
 mod reporter;
+mod systemd;
 mod tls;
 mod types;
 
@@ -61,6 +62,46 @@ enum Command {
         /// Optional list of specific apps to check (by hostname).
         #[arg(long, value_delimiter = ',')]
         apps: Option<Vec<String>>,
+    },
+    /// Manage penny as a systemd user service.
+    Systemd {
+        #[clap(subcommand)]
+        action: SystemdAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SystemdAction {
+    /// Install and start the penny systemd user service.
+    Install {
+        /// Path to the config file.
+        config: String,
+
+        /// The HTTP address to bind to.
+        #[arg(short, long, default_value = "0.0.0.0:80")]
+        address: String,
+
+        /// The HTTPS address to bind to.
+        #[arg(long, default_value = "0.0.0.0:443")]
+        https_address: String,
+
+        /// Disable TLS even if configured.
+        #[arg(long)]
+        no_tls: bool,
+
+        /// Password for dashboard access (can also use PENNY_PASSWORD env var)
+        #[arg(long, env = "PENNY_PASSWORD")]
+        password: Option<String>,
+    },
+    /// Stop and remove the penny systemd user service.
+    Uninstall,
+    /// Show the status of the penny systemd user service.
+    Status,
+    /// Show logs from the penny systemd user service.
+    Logs {
+        /// Follow log output.
+        #[arg(short, long)]
+        follow: bool,
     },
 }
 
@@ -146,6 +187,24 @@ fn main() -> color_eyre::Result<()> {
             runtime.block_on(check::run_check(&config, apps))?;
             Ok(())
         }
+        Command::Systemd { action } => match action {
+            SystemdAction::Install {
+                config,
+                address,
+                https_address,
+                no_tls,
+                password,
+            } => systemd::install(systemd::InstallOpts {
+                config,
+                address,
+                https_address,
+                no_tls,
+                password,
+            }),
+            SystemdAction::Uninstall => systemd::uninstall(),
+            SystemdAction::Status => systemd::status(),
+            SystemdAction::Logs { follow } => systemd::logs(follow),
+        },
         Command::Serve {
             config,
             address,
