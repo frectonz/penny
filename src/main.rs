@@ -103,6 +103,8 @@ enum SystemdAction {
         #[arg(short, long)]
         follow: bool,
     },
+    /// Restart the penny systemd user service.
+    Restart,
 }
 
 async fn setup_api_server(
@@ -204,6 +206,7 @@ fn main() -> color_eyre::Result<()> {
             SystemdAction::Uninstall => systemd::uninstall(),
             SystemdAction::Status => systemd::status(),
             SystemdAction::Logs { follow } => systemd::logs(follow),
+            SystemdAction::Restart => systemd::restart(),
         },
         Command::Serve {
             config,

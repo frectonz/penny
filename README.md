@@ -216,6 +216,7 @@ Manage penny as a systemd user service (Linux only). Generates a unit file that 
 penny systemd install <config> [OPTIONS]
 penny systemd uninstall
 penny systemd status
+penny systemd restart
 penny systemd logs [--follow]
 ```
 
@@ -229,7 +230,9 @@ Options:
   --password <PASSWORD>    Password for dashboard access [env: PENNY_PASSWORD]
 ```
 
-**Uninstall** stops and removes the service. **Status** and **Logs** are passthroughs to `systemctl` and `journalctl`.
+- **Uninstall** stops and removes the service.
+- **Restart** restarts the service (useful after editing `penny.toml`).
+- **Status** and **Logs** are passthroughs to `systemctl` and `journalctl`.
 
 ## Dashboard
 

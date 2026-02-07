@@ -225,6 +225,27 @@ pub fn status() -> color_eyre::Result<()> {
     Ok(())
 }
 
+pub fn restart() -> color_eyre::Result<()> {
+    if !cfg!(target_os = "linux") {
+        return Err(color_eyre::eyre::eyre!(
+            "the `systemd` command is only available on Linux"
+        ));
+    }
+
+    let service_path = service_file_path()?;
+    if !service_path.exists() {
+        return Err(color_eyre::eyre::eyre!(
+            "service not installed (no unit file at {}), run `penny systemd install` first",
+            service_path.display()
+        ));
+    }
+
+    run_cmd("systemctl", &["--user", "restart", SERVICE_NAME])?;
+    println!("restarted {SERVICE_NAME}");
+
+    Ok(())
+}
+
 pub fn logs(follow: bool) -> color_eyre::Result<()> {
     if !cfg!(target_os = "linux") {
         return Err(color_eyre::eyre::eyre!(
