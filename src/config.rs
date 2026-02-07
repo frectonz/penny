@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -16,6 +16,84 @@ use crate::collector::Collector;
 use crate::db::SqliteDatabase;
 use crate::proxy::ProxyContext;
 use crate::types::{Host, RunId};
+
+const SHORT_WINDOW_MINUTES: u64 = 5;
+const LONG_WINDOW_MINUTES: u64 = 30;
+
+#[derive(Debug, Default)]
+pub struct RequestTracker {
+    /// Request counts bucketed by minute (minute_epoch, count)
+    buckets: VecDeque<(u64, u64)>,
+}
+
+impl RequestTracker {
+    fn current_minute() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            / 60
+    }
+
+    pub fn record_request(&mut self) {
+        let now = Self::current_minute();
+
+        if let Some(last) = self.buckets.back_mut()
+            && last.0 == now
+        {
+            last.1 += 1;
+            return;
+        }
+
+        self.buckets.push_back((now, 1));
+
+        // Prune buckets older than the long window
+        let cutoff = now.saturating_sub(LONG_WINDOW_MINUTES);
+        while let Some(front) = self.buckets.front() {
+            if front.0 < cutoff {
+                self.buckets.pop_front();
+            } else {
+                break;
+            }
+        }
+    }
+
+    /// Returns (short_rate, long_rate) in requests per minute.
+    pub fn request_rates(&self) -> (f64, f64) {
+        let now = Self::current_minute();
+        let short_cutoff = now.saturating_sub(SHORT_WINDOW_MINUTES);
+        let long_cutoff = now.saturating_sub(LONG_WINDOW_MINUTES);
+
+        let mut short_total: u64 = 0;
+        let mut long_total: u64 = 0;
+
+        for &(minute, count) in &self.buckets {
+            if minute >= long_cutoff {
+                long_total += count;
+                if minute >= short_cutoff {
+                    short_total += count;
+                }
+            }
+        }
+
+        let short_rate = short_total as f64 / SHORT_WINDOW_MINUTES as f64;
+        let long_rate = long_total as f64 / LONG_WINDOW_MINUTES as f64;
+
+        (short_rate, long_rate)
+    }
+
+    /// Total requests within the long window, for logging.
+    pub fn total_recent_requests(&self) -> u64 {
+        let now = Self::current_minute();
+        let cutoff = now.saturating_sub(LONG_WINDOW_MINUTES);
+
+        self.buckets
+            .iter()
+            .filter(|(minute, _)| *minute >= cutoff)
+            .map(|(_, count)| count)
+            .sum()
+    }
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct App {
@@ -38,6 +116,24 @@ pub struct App {
     #[serde(default)]
     pub cold_start_page: bool,
 
+    #[serde(default)]
+    pub adaptive_wait: bool,
+
+    #[serde(default)]
+    pub min_wait_period: Option<SignedDuration>,
+
+    #[serde(default)]
+    pub max_wait_period: Option<SignedDuration>,
+
+    #[serde(default)]
+    pub low_req_per_hour: Option<f64>,
+
+    #[serde(default)]
+    pub high_req_per_hour: Option<f64>,
+
+    #[serde(skip)]
+    pub request_tracker: RequestTracker,
+
     #[serde(skip)]
     pub confirmed_healthy: bool,
 
@@ -55,6 +151,14 @@ pub fn default_start_timeout() -> SignedDuration {
 
 pub fn default_stop_timeout() -> SignedDuration {
     SignedDuration::from_secs(30)
+}
+
+fn default_min_wait_period() -> SignedDuration {
+    SignedDuration::from_mins(5)
+}
+
+fn default_max_wait_period() -> SignedDuration {
+    SignedDuration::from_mins(30)
 }
 
 fn default_health_check_initial_backoff_ms() -> u64 {
@@ -281,6 +385,37 @@ impl AppCommand {
 static HTTP: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(reqwest::Client::new);
 
 impl App {
+    pub fn effective_wait_period(&self) -> Duration {
+        if !self.adaptive_wait {
+            return self.wait_period.unsigned_abs();
+        }
+
+        // When adaptive, wait_period is ignored; use dedicated min/max bounds
+        let min_wait = self
+            .min_wait_period
+            .unwrap_or(default_min_wait_period())
+            .unsigned_abs();
+        let max_wait = self
+            .max_wait_period
+            .unwrap_or(default_max_wait_period())
+            .unsigned_abs();
+
+        let (short_rate, long_rate) = self.request_tracker.request_rates();
+        let effective_rate = short_rate.max(long_rate);
+
+        // Convert user-facing req/hr thresholds to req/min for comparison with rates
+        let low = self.low_req_per_hour.unwrap_or(12.0) / 60.0;
+        let high = self.high_req_per_hour.unwrap_or(300.0) / 60.0;
+
+        // Smoothstep (Hermite): S-curve, gentle at extremes, steeper in middle
+        let t = ((effective_rate - low) / (high - low)).clamp(0.0, 1.0);
+        let factor = t * t * (3.0 - 2.0 * t);
+
+        let min_secs = min_wait.as_secs_f64();
+        let max_secs = max_wait.as_secs_f64();
+        Duration::from_secs_f64(min_secs + (max_secs - min_secs) * factor)
+    }
+
     #[instrument(skip(self), fields(address = %self.address, health_check = %self.health_check))]
     pub async fn is_running(&self) -> bool {
         let address = self.address;
@@ -485,14 +620,24 @@ impl App {
             task.abort();
         }
 
-        let wait_period = app_guard.wait_period;
-        info!(wait_period = ?wait_period, "scheduling app shutdown");
+        app_guard.request_tracker.record_request();
+        let wait_period = app_guard.effective_wait_period();
+        let (short_rate, long_rate) = app_guard.request_tracker.request_rates();
+        let total_reqs = app_guard.request_tracker.total_recent_requests();
+        info!(
+            ?wait_period,
+            short_rate = format!("{short_rate:.2}"),
+            long_rate = format!("{long_rate:.2}"),
+            total_reqs,
+            adaptive = app_guard.adaptive_wait,
+            "scheduling app shutdown"
+        );
 
         let handle = {
             let app = app.clone();
             let host = host.clone();
             tokio::spawn(async move {
-                let wait_period = app.read().await.wait_period.unsigned_abs();
+                let wait_period = app.read().await.effective_wait_period();
                 pingora::time::sleep(wait_period).await;
                 info!("wait period elapsed, stopping app");
 
