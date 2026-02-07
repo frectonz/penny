@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.svg" alt="penny logo" width="128">
+</p>
+
 # penny
 
 Serverless for your servers.
