@@ -123,7 +123,7 @@ fn loading_page_html(host: &str) -> String {
         }}
         .container {{ text-align: center; padding: 2rem; }}
         .logo {{
-            animation: pulse 2s ease-in-out infinite;
+            animation: pulse 1s ease-in-out infinite;
         }}
         @keyframes pulse {{
             0%, 100% {{ opacity: 1; transform: scale(1); }}
