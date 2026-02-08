@@ -104,7 +104,7 @@ adaptive_wait = true
 | Field | Default | Description |
 |-------|---------|-------------|
 | `address` | *required* | Address the backend listens on |
-| `command` | *required* | Shell command to start the app |
+| `command` | *required* | Shell command to start the app (see [Start and Stop Commands](#start-and-stop-commands)) |
 | `health_check` | *required* | HTTP path to check if the app is ready |
 | `wait_period` | `10m` | How long to wait after the last request before killing the process |
 | `adaptive_wait` | `false` | Enable adaptive idle timeout based on traffic patterns (see below) |
@@ -180,6 +180,25 @@ health_check = "/"
 ```
 
 When a request hits `api.example.com`, penny starts `frontend.example.com` in the background, anticipating it will be needed soon. The warmed app gets its own idle timer — if no direct traffic arrives, it shuts down after its `wait_period` as usual.
+
+### Start and Stop Commands
+
+By default, `command` is a single string. Penny starts the process when a request arrives and kills it (SIGKILL) when the idle timeout expires:
+
+```toml
+["myapp.example.com"]
+command = "node server.js"
+```
+
+If your app needs a graceful shutdown — for example a Docker container or a database — you can provide separate start and stop commands:
+
+```toml
+["myapp.example.com".command]
+start = "docker start myapp"
+end = "docker stop myapp"
+```
+
+When using the table form, penny runs the `end` command on shutdown instead of killing the process.
 
 ## CLI
 
