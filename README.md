@@ -10,19 +10,6 @@ You have a $5 VPS with 10 side projects on it. They all run 24/7 eating memory e
 
 Instead of telling penny which address to proxy to, you give it the command to start your server. It runs that command on the first request, waits for a health check, proxies the traffic, and then kills the process after a configurable idle period. Next request comes in, it starts all over again.
 
-## Features
-
-- **On-demand process management** — Servers start on first request, get killed after idle timeout
-- **Adaptive idle timeout** — Opt-in traffic-aware shutdown timing that keeps busy apps alive longer and shuts down idle apps faster
-- **Automatic TLS** — Let's Encrypt certificates provisioned and renewed automatically
-- **Built-in dashboard** — Monitor app runs, uptime, failure rates, and captured logs
-- **Health checks** — Configurable endpoints with exponential backoff
-- **Eager start on related traffic** — Pre-warm related apps in the background when traffic hits a dependency
-- **Cold start loading page** — Opt-in friendly loading page for browser users during cold starts instead of a hanging connection
-- **Multi-app routing** — Route multiple domains to different backends from a single config file
-- **Single binary** — Dashboard UI embedded in the binary, no external dependencies at runtime
-
-
 ## How It Works
 
 <p align="center">
