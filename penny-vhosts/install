@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+PENNY_DATA_DIR="$DOKKU_LIB_ROOT/data/penny-vhosts"
+
+mkdir -p "$PENNY_DATA_DIR"
+
+# Generate initial (possibly empty) penny.toml
+penny dokku build-config
+
+# Install penny as a system-level systemd service
+penny systemd install --system "$PENNY_DATA_DIR/penny.toml"

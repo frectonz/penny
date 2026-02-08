@@ -1,0 +1,5 @@
+[plugin]
+description = "penny-vhosts"
+version = "0.0.1"
+export-subcommands = true
+config = false

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/property-functions"
+
+trigger-penny-proxy-disable() {
+  declare desc="disable penny proxy for an app"
+  declare trigger="proxy-disable"
+  declare APP="$1"
+
+  local PROXY_TYPE
+  PROXY_TYPE=$(fn-plugin-property-get "proxy" "$APP" "proxy-type" "")
+
+  if [[ "$PROXY_TYPE" != "penny" ]]; then
+    return
+  fi
+
+  dokku_log_info1 "Disabling penny proxy for $APP"
+  penny dokku build-config
+  penny systemd restart --system
+}
+
+trigger-penny-proxy-disable "$@"

@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/property-functions"
+
+trigger-penny-proxy-clear-config() {
+  declare desc="clear penny proxy config for an app"
+  declare trigger="proxy-clear-config"
+  declare APP="$1"
+
+  local PROXY_TYPE
+  PROXY_TYPE=$(fn-plugin-property-get "proxy" "$APP" "proxy-type" "")
+
+  if [[ "$PROXY_TYPE" != "penny" ]]; then
+    return
+  fi
+
+  dokku_log_info1 "Clearing penny proxy config for $APP"
+  penny dokku clear-config "$APP"
+  penny systemd restart --system
+}
+
+trigger-penny-proxy-clear-config "$@"

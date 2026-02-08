@@ -6,6 +6,7 @@ mod check;
 mod collector;
 mod config;
 mod db;
+mod dokku;
 mod proxy;
 mod reporter;
 mod systemd;
@@ -68,11 +69,16 @@ enum Command {
         #[clap(subcommand)]
         action: SystemdAction,
     },
+    /// Dokku integration commands.
+    Dokku {
+        #[clap(subcommand)]
+        action: DokkuAction,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 enum SystemdAction {
-    /// Install and start the penny systemd user service.
+    /// Install and start the penny systemd service.
     Install {
         /// Path to the config file.
         config: String,
@@ -92,19 +98,50 @@ enum SystemdAction {
         /// Password for dashboard access (can also use PENNY_PASSWORD env var)
         #[arg(long, env = "PENNY_PASSWORD")]
         password: Option<String>,
+
+        /// Install as a system-level service instead of a user service.
+        #[arg(long)]
+        system: bool,
     },
-    /// Stop and remove the penny systemd user service.
-    Uninstall,
-    /// Show the status of the penny systemd user service.
-    Status,
-    /// Show logs from the penny systemd user service.
+    /// Stop and remove the penny systemd service.
+    Uninstall {
+        /// Manage the system-level service instead of a user service.
+        #[arg(long)]
+        system: bool,
+    },
+    /// Show the status of the penny systemd service.
+    Status {
+        /// Query the system-level service instead of a user service.
+        #[arg(long)]
+        system: bool,
+    },
+    /// Show logs from the penny systemd service.
     Logs {
         /// Follow log output.
         #[arg(short, long)]
         follow: bool,
+
+        /// Query the system-level service instead of a user service.
+        #[arg(long)]
+        system: bool,
     },
-    /// Restart the penny systemd user service.
-    Restart,
+    /// Restart the penny systemd service.
+    Restart {
+        /// Restart the system-level service instead of a user service.
+        #[arg(long)]
+        system: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum DokkuAction {
+    /// Generate penny.toml from all penny-proxied Dokku apps.
+    BuildConfig,
+    /// Remove an app from the penny config and regenerate.
+    ClearConfig {
+        /// The Dokku app name to clear.
+        app: String,
+    },
 }
 
 async fn setup_api_server(
@@ -196,17 +233,23 @@ fn main() -> color_eyre::Result<()> {
                 https_address,
                 no_tls,
                 password,
+                system,
             } => systemd::install(systemd::InstallOpts {
                 config,
                 address,
                 https_address,
                 no_tls,
                 password,
+                system,
             }),
-            SystemdAction::Uninstall => systemd::uninstall(),
-            SystemdAction::Status => systemd::status(),
-            SystemdAction::Logs { follow } => systemd::logs(follow),
-            SystemdAction::Restart => systemd::restart(),
+            SystemdAction::Uninstall { system } => systemd::uninstall(system),
+            SystemdAction::Status { system } => systemd::status(system),
+            SystemdAction::Logs { follow, system } => systemd::logs(follow, system),
+            SystemdAction::Restart { system } => systemd::restart(system),
+        },
+        Command::Dokku { action } => match action {
+            DokkuAction::BuildConfig => dokku::build_config(),
+            DokkuAction::ClearConfig { app } => dokku::clear_config(&app),
         },
         Command::Serve {
             config,
