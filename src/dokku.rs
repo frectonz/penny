@@ -187,6 +187,12 @@ fn generate_config(apps: &[AppInfo]) -> String {
             if let Some(val) = read_property(&app.name, "high-req-per-hour") {
                 config.push_str(&format!("high_req_per_hour = {val}\n"));
             }
+            if let Some(val) = read_property(&app.name, "cold-start-page-path") {
+                config.push_str(&format!(
+                    "cold_start_page_path = \"{}\"\n",
+                    escape_toml_string(&val)
+                ));
+            }
 
             config.push_str(&format!("\n[\"{escaped_domain}\".command]\n"));
             config.push_str(&format!(

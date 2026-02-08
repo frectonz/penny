@@ -117,6 +117,12 @@ pub struct App {
     pub cold_start_page: bool,
 
     #[serde(default)]
+    pub cold_start_page_path: Option<PathBuf>,
+
+    #[serde(skip)]
+    pub cold_start_page_html: Option<String>,
+
+    #[serde(default)]
     pub adaptive_wait: bool,
 
     #[serde(default)]
@@ -792,6 +798,32 @@ impl Config {
             domains.push(api_domain.clone());
         }
         domains
+    }
+
+    pub fn load_cold_start_pages(&mut self) -> color_eyre::Result<()> {
+        for (host, app) in &self.apps {
+            let mut guard = app.blocking_write();
+            if let Some(path) = &guard.cold_start_page_path {
+                let html = std::fs::read_to_string(path).map_err(|e| {
+                    color_eyre::eyre::eyre!(
+                        "failed to read cold start page for {host} at {}: {e}",
+                        path.display()
+                    )
+                })?;
+
+                if !html.contains("<meta http-equiv=\"refresh\"") {
+                    warn!(
+                        host = %host,
+                        path = %path.display(),
+                        "custom cold start page is missing <meta http-equiv=\"refresh\" ...> tag; page won't auto-refresh"
+                    );
+                }
+
+                guard.cold_start_page = true;
+                guard.cold_start_page_html = Some(html);
+            }
+        }
+        Ok(())
     }
 
     pub async fn get_proxy_context(&self, host: &str) -> Option<ProxyContext> {

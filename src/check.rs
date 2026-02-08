@@ -149,7 +149,8 @@ pub async fn run_check(
     apps_filter: Option<Vec<String>>,
 ) -> color_eyre::Result<()> {
     let config_content = std::fs::read_to_string(config_path)?;
-    let config: Config = toml::from_str(&config_content)?;
+    let mut config: Config = toml::from_str(&config_content)?;
+    config.load_cold_start_pages()?;
 
     info!(apps_count = config.apps.len(), "loaded configuration");
 

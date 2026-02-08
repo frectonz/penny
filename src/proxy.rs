@@ -172,8 +172,12 @@ fn loading_page_html(host: &str) -> String {
 async fn respond_with_loading_page(
     session: &mut pingora::proxy::Session,
     host: &str,
+    custom_html: Option<&str>,
 ) -> pingora::Result<bool> {
-    let body = loading_page_html(host);
+    let body = match custom_html {
+        Some(html) => html.to_owned(),
+        None => loading_page_html(host),
+    };
     let mut resp = pingora::http::ResponseHeader::build(202, None)?;
     resp.insert_header(http::header::CONTENT_TYPE, "text/html; charset=utf-8")?;
     resp.insert_header(http::header::CONTENT_LENGTH, body.len().to_string())?;
@@ -262,6 +266,7 @@ where
         {
             let guard = app.read().await;
             let cold_start_page = guard.cold_start_page;
+            let cold_start_page_html = guard.cold_start_page_html.clone();
             let also_warm = guard.also_warm.clone();
             drop(guard);
 
@@ -270,7 +275,12 @@ where
                     App::begin_start_app(&proxy_ctx.host, app, self.collector.clone()).await?;
                 App::schedule_kill(&proxy_ctx.host, app, self.collector.clone()).await;
                 if !is_ready {
-                    return respond_with_loading_page(session, &proxy_ctx.host.0).await;
+                    return respond_with_loading_page(
+                        session,
+                        &proxy_ctx.host.0,
+                        cold_start_page_html.as_deref(),
+                    )
+                    .await;
                 }
             }
 

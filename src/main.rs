@@ -268,7 +268,8 @@ fn main() -> color_eyre::Result<()> {
             );
 
             let config_content = std::fs::read_to_string(&config)?;
-            let config: Config = toml::from_str(&config_content)?;
+            let mut config: Config = toml::from_str(&config_content)?;
+            config.load_cold_start_pages()?;
 
             info!(apps_count = config.apps.len(), "loaded configuration");
             for (host, app) in &config.apps {

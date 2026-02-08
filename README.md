@@ -102,6 +102,7 @@ adaptive_wait = true
 | `start_timeout` | `30s` | Max time to wait for the app to become healthy |
 | `stop_timeout` | `30s` | Max time to wait for the app to stop |
 | `cold_start_page` | `false` | Show a loading page to browser users during cold starts instead of blocking the connection |
+| `cold_start_page_path` | — | Path to a custom HTML file to serve as the cold start loading page (implicitly enables `cold_start_page`) |
 | `also_warm` | `[]` | List of other app hostnames to pre-warm when this app receives traffic |
 | `health_check_initial_backoff_ms` | `10` | Initial retry delay for health checks |
 | `health_check_max_backoff_secs` | `2` | Max retry delay for health checks |
@@ -167,6 +168,37 @@ health_check = "/"
 ```
 
 When a request hits `api.example.com`, penny starts `frontend.example.com` in the background, anticipating it will be needed soon. The warmed app gets its own idle timer — if no direct traffic arrives, it shuts down after its `wait_period` as usual.
+
+### Custom Cold Start Page
+
+By default, penny shows a built-in loading page during cold starts. You can provide your own branded HTML page per app using `cold_start_page_path`:
+
+```toml
+["myapp.example.com"]
+address = "127.0.0.1:3001"
+health_check = "/health"
+command = "node server.js"
+cold_start_page_path = "./loading.html"
+```
+
+Setting `cold_start_page_path` implicitly enables `cold_start_page` — you don't need to set both. The HTML file is read once at startup.
+
+Your custom page **must** include a meta refresh tag so the browser automatically retries:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="2">
+    <title>Loading...</title>
+</head>
+<body>
+    <p>Starting up, please wait...</p>
+</body>
+</html>
+```
+
+A warning is logged at startup if the meta refresh tag is missing.
 
 ### Start and Stop Commands
 
