@@ -148,15 +148,20 @@ async fn setup_api_server(
     api_address: Option<std::net::SocketAddr>,
     collector: SqliteDatabase,
     pagination_config: PaginationConfig,
-) {
+) -> color_eyre::Result<()> {
     if let Some(api_address) = api_address {
         let router = create_api_router(collector, pagination_config);
-        let listener = tokio::net::TcpListener::bind(api_address).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(api_address)
+            .await
+            .context("failed to bind API server address")?;
         info!(address = %api_address, "API server listening");
         tokio::spawn(async move {
-            axum::serve(listener, router).await.unwrap();
+            if let Err(e) = axum::serve(listener, router).await {
+                error!("API server error: {e}");
+            }
         });
     }
+    Ok(())
 }
 
 fn setup_tls(
@@ -190,7 +195,7 @@ async fn setup(
         default_limit: config.default_page_limit,
         max_limit: config.max_page_limit,
     };
-    setup_api_server(config.api_address, collector.clone(), pagination_config).await;
+    setup_api_server(config.api_address, collector.clone(), pagination_config).await?;
     let challenge_store = create_challenge_store();
 
     if let Some(tls_config) = &config.tls
