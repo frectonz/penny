@@ -263,7 +263,7 @@ fn main() -> color_eyre::Result<()> {
             no_tls,
             password,
         } => {
-            auth::init_password(password.clone());
+            auth::init_password(password.clone())?;
             info!(
                 config = %config,
                 address = %address,

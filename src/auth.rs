@@ -6,15 +6,16 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use base64::{Engine, engine::general_purpose::STANDARD};
+use color_eyre::eyre;
 use serde::Serialize;
 use std::sync::OnceLock;
 
 static PASSWORD: OnceLock<Option<String>> = OnceLock::new();
 
-pub fn init_password(password: Option<String>) {
+pub fn init_password(password: Option<String>) -> eyre::Result<()> {
     PASSWORD
         .set(password)
-        .expect("Password already initialized");
+        .map_err(|_| eyre::eyre!("Password already initialized"))
 }
 
 pub fn is_auth_required() -> bool {
