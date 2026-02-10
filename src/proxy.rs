@@ -96,7 +96,23 @@ fn is_browser_navigation(session: &pingora::prelude::Session) -> bool {
     true
 }
 
+fn escape_html(s: &str) -> String {
+    let mut escaped = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => escaped.push_str("&amp;"),
+            '<' => escaped.push_str("&lt;"),
+            '>' => escaped.push_str("&gt;"),
+            '"' => escaped.push_str("&quot;"),
+            '\'' => escaped.push_str("&#x27;"),
+            _ => escaped.push(c),
+        }
+    }
+    escaped
+}
+
 fn loading_page_html(host: &str) -> String {
+    let host = escape_html(host);
     format!(
         r#"<!DOCTYPE html>
 <html lang="en">
