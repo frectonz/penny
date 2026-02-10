@@ -55,17 +55,19 @@ impl AcmeClient {
             LetsEncrypt::Production.url()
         };
 
-        let (account, credentials) = Account::create(
-            &NewAccount {
-                contact: &[&format!("mailto:{}", email)],
-                terms_of_service_agreed: true,
-                only_return_existing: false,
-            },
-            url,
-            None,
-        )
-        .await
-        .wrap_err("failed to create ACME account")?;
+        let (account, credentials) = Account::builder()
+            .wrap_err("failed to create ACME account builder")?
+            .create(
+                &NewAccount {
+                    contact: &[&format!("mailto:{}", email)],
+                    terms_of_service_agreed: true,
+                    only_return_existing: false,
+                },
+                url.to_string(),
+                None,
+            )
+            .await
+            .wrap_err("failed to create ACME account")?;
 
         let pem =
             serde_json::to_string(&credentials).wrap_err("failed to serialize ACME credentials")?;
@@ -78,7 +80,9 @@ impl AcmeClient {
         let credentials: AccountCredentials =
             serde_json::from_str(pem).wrap_err("failed to deserialize ACME credentials")?;
 
-        Account::from_credentials(credentials)
+        Account::builder()
+            .wrap_err("failed to create ACME account builder")?
+            .from_credentials(credentials)
             .await
             .wrap_err("failed to load ACME account")
     }
@@ -105,9 +109,7 @@ impl AcmeClient {
         // Create the order
         let mut order = self
             .account
-            .new_order(&NewOrder {
-                identifiers: &identifiers,
-            })
+            .new_order(&NewOrder::new(&identifiers))
             .await
             .wrap_err("failed to create ACME order")?;
 
@@ -115,58 +117,40 @@ impl AcmeClient {
         debug!(status = ?state.status, "order created");
 
         // Get authorizations and set up challenges
-        let authorizations = order
-            .authorizations()
-            .await
-            .wrap_err("failed to get authorizations")?;
-
         let mut pending_tokens = Vec::new();
 
-        for auth in &authorizations {
+        let mut auths = order.authorizations();
+        while let Some(auth_result) = auths.next().await {
+            let mut auth = auth_result.wrap_err("failed to get authorization")?;
+
             match auth.status {
                 AuthorizationStatus::Valid => {
-                    debug!(identifier = ?auth.identifier, "authorization already valid");
+                    debug!(identifier = ?auth.identifier(), "authorization already valid");
                     continue;
                 }
                 AuthorizationStatus::Pending => {
-                    debug!(identifier = ?auth.identifier, "authorization pending, setting up challenge");
+                    debug!(identifier = ?auth.identifier(), "authorization pending, setting up challenge");
                 }
                 status => {
                     return Err(eyre!("unexpected authorization status: {:?}", status));
                 }
             }
 
-            let challenge = auth
-                .challenges
-                .iter()
-                .find(|c| c.r#type == ChallengeType::Http01)
+            let mut challenge = auth
+                .challenge(ChallengeType::Http01)
                 .ok_or_else(|| eyre!("no HTTP-01 challenge found"))?;
 
             let token = challenge.token.clone();
-            let key_auth = order.key_authorization(challenge).as_str().to_owned();
+            let key_auth = challenge.key_authorization().as_str().to_owned();
 
             add_challenge(challenge_store, token.clone(), key_auth).await;
             pending_tokens.push(token);
-        }
 
-        // Set challenges ready (tell ACME server we're ready)
-        for auth in &authorizations {
-            if auth.status != AuthorizationStatus::Pending {
-                continue;
-            }
-
-            let challenge = auth
-                .challenges
-                .iter()
-                .find(|c| c.r#type == ChallengeType::Http01)
-                .ok_or_else(|| eyre!("no HTTP-01 challenge found"))?;
-
-            order
-                .set_challenge_ready(&challenge.url)
+            challenge
+                .set_ready()
                 .await
                 .wrap_err("failed to set challenge ready")?;
         }
-
         // Wait for order to become ready
         let mut tries = 0;
         let max_tries = self.order_poll_max_retries;
@@ -228,7 +212,7 @@ impl AcmeClient {
 
         // Finalize order with CSR
         order
-            .finalize(csr.der())
+            .finalize_csr(csr.der())
             .await
             .wrap_err("failed to finalize order")?;
 
