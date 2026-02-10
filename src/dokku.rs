@@ -13,6 +13,21 @@ fn config_file_path() -> PathBuf {
     data_dir().join(CONFIG_FILE)
 }
 
+fn validate_app_name(app: &str) -> color_eyre::Result<()> {
+    if app.is_empty() {
+        return Err(color_eyre::eyre::eyre!("App name cannot be empty"));
+    }
+    if !app
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(color_eyre::eyre::eyre!(
+            "Invalid app name '{app}': must contain only alphanumeric characters, hyphens, or underscores"
+        ));
+    }
+    Ok(())
+}
+
 fn run_cmd_output(program: &str, args: &[&str]) -> color_eyre::Result<String> {
     let output = Command::new(program)
         .args(args)
@@ -55,6 +70,9 @@ fn get_penny_apps() -> color_eyre::Result<Vec<AppInfo>> {
     for app in apps_output.lines().skip(1) {
         let app = app.trim();
         if app.is_empty() {
+            continue;
+        }
+        if validate_app_name(app).is_err() {
             continue;
         }
 
@@ -225,6 +243,7 @@ pub fn build_config() -> color_eyre::Result<()> {
 }
 
 pub fn clear_config(app: &str) -> color_eyre::Result<()> {
+    validate_app_name(app)?;
     // Clear config is the same as build config — the cleared app simply won't
     // appear because it's no longer penny-proxied or has been removed.
     println!("clearing penny config for {app}");
