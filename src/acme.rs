@@ -10,6 +10,12 @@ use crate::challenge::{ChallengeStore, add_challenge, remove_challenge};
 use crate::config::TlsConfig;
 use crate::db::SqliteDatabase;
 
+async fn cleanup_pending_challenges(challenge_store: &ChallengeStore, tokens: &[String]) {
+    for token in tokens {
+        remove_challenge(challenge_store, token).await;
+    }
+}
+
 /// ACME client for obtaining and managing certificates.
 pub struct AcmeClient {
     account: Account,
@@ -166,36 +172,28 @@ impl AcmeClient {
             match state.status {
                 OrderStatus::Ready => break state,
                 OrderStatus::Invalid => {
-                    for token in &pending_tokens {
-                        remove_challenge(challenge_store, token).await;
-                    }
+                    cleanup_pending_challenges(challenge_store, &pending_tokens).await;
                     return Err(eyre!("order became invalid"));
                 }
                 OrderStatus::Valid => break state,
                 OrderStatus::Pending => {
                     tries += 1;
                     if tries >= max_tries {
-                        for token in &pending_tokens {
-                            remove_challenge(challenge_store, token).await;
-                        }
+                        cleanup_pending_challenges(challenge_store, &pending_tokens).await;
                         return Err(eyre!("order did not become ready in time"));
                     }
                 }
                 OrderStatus::Processing => {
                     tries += 1;
                     if tries >= max_tries {
-                        for token in &pending_tokens {
-                            remove_challenge(challenge_store, token).await;
-                        }
+                        cleanup_pending_challenges(challenge_store, &pending_tokens).await;
                         return Err(eyre!("order processing timed out"));
                     }
                 }
             }
         };
 
-        for token in &pending_tokens {
-            remove_challenge(challenge_store, token).await;
-        }
+        cleanup_pending_challenges(challenge_store, &pending_tokens).await;
 
         // Generate CSR
         let key_pair = KeyPair::generate().wrap_err("failed to generate key pair")?;
