@@ -1,107 +1,99 @@
 use std::fmt::Debug;
 
+use color_eyre::Result;
 use jiff::Timestamp;
-use tracing::error;
 
 use crate::db::SqliteDatabase;
 use crate::types::{Host, RunId};
 
 #[async_trait::async_trait]
 pub trait Collector: Sync + Send + Clone + Debug + 'static {
-    async fn app_started(&self, host: &Host) -> RunId;
-    async fn app_stopped(&self, host: &Host);
+    async fn app_started(&self, host: &Host) -> Result<RunId>;
+    async fn app_stopped(&self, host: &Host) -> Result<()>;
 
-    async fn app_start_failed(&self, host: &Host);
-    async fn app_stop_failed(&self, host: &Host);
+    async fn app_start_failed(&self, host: &Host) -> Result<()>;
+    async fn app_stop_failed(&self, host: &Host) -> Result<()>;
 
-    async fn append_stdout(&self, run_id: &RunId, line: String);
-    async fn append_stderr(&self, run_id: &RunId, line: String);
+    async fn append_stdout(&self, run_id: &RunId, line: String) -> Result<()>;
+    async fn append_stderr(&self, run_id: &RunId, line: String) -> Result<()>;
 }
 
 #[async_trait::async_trait]
 impl Collector for SqliteDatabase {
-    async fn app_started(&self, host: &Host) -> RunId {
+    async fn app_started(&self, host: &Host) -> Result<RunId> {
         let run_id = RunId::new();
         let started_at = Timestamp::now().as_millisecond();
 
-        if let Err(e) = sqlx::query("INSERT INTO runs (run_id, host, started_at) VALUES (?, ?, ?)")
+        sqlx::query("INSERT INTO runs (run_id, host, started_at) VALUES (?, ?, ?)")
             .bind(&run_id.0)
             .bind(&host.0)
             .bind(started_at)
             .execute(&self.pool)
-            .await
-        {
-            error!("failed to insert run record: {e}");
-        }
+            .await?;
 
-        run_id
+        Ok(run_id)
     }
 
-    async fn app_stopped(&self, host: &Host) {
+    async fn app_stopped(&self, host: &Host) -> Result<()> {
         let stopped_at = Timestamp::now().as_millisecond();
 
-        if let Err(e) = sqlx::query(
+        sqlx::query(
             "UPDATE runs SET stopped_at = ? WHERE run_id = (SELECT run_id FROM runs WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1)",
         )
         .bind(stopped_at)
         .bind(&host.0)
         .execute(&self.pool)
-        .await
-        {
-            error!("failed to update run record: {e}");
-        }
+        .await?;
+
+        Ok(())
     }
 
-    async fn app_start_failed(&self, host: &Host) {
-        if let Err(e) = sqlx::query(
+    async fn app_start_failed(&self, host: &Host) -> Result<()> {
+        sqlx::query(
             "UPDATE runs SET start_failed = 1 WHERE run_id = (SELECT run_id FROM runs WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1)",
         )
         .bind(&host.0)
         .execute(&self.pool)
-        .await
-        {
-            error!("failed to update run record: {e}");
-        }
+        .await?;
+
+        Ok(())
     }
 
-    async fn app_stop_failed(&self, host: &Host) {
-        if let Err(e) = sqlx::query(
+    async fn app_stop_failed(&self, host: &Host) -> Result<()> {
+        sqlx::query(
             "UPDATE runs SET stop_failed = 1 WHERE run_id = (SELECT run_id FROM runs WHERE host = ? AND stopped_at IS NULL ORDER BY started_at DESC LIMIT 1)",
         )
         .bind(&host.0)
         .execute(&self.pool)
-        .await
-        {
-            error!("failed to update run record: {e}");
-        }
+        .await?;
+
+        Ok(())
     }
 
-    async fn append_stdout(&self, run_id: &RunId, line: String) {
+    async fn append_stdout(&self, run_id: &RunId, line: String) -> Result<()> {
         let timestamp = Timestamp::now().as_millisecond();
 
-        if let Err(e) = sqlx::query("INSERT INTO stdout (run_id, line, timestamp) VALUES (?, ?, ?)")
+        sqlx::query("INSERT INTO stdout (run_id, line, timestamp) VALUES (?, ?, ?)")
             .bind(&run_id.0)
             .bind(&line)
             .bind(timestamp)
             .execute(&self.pool)
-            .await
-        {
-            error!("failed to insert stdout line: {e}");
-        }
+            .await?;
+
+        Ok(())
     }
 
-    async fn append_stderr(&self, run_id: &RunId, line: String) {
+    async fn append_stderr(&self, run_id: &RunId, line: String) -> Result<()> {
         let timestamp = Timestamp::now().as_millisecond();
 
-        if let Err(e) = sqlx::query("INSERT INTO stderr (run_id, line, timestamp) VALUES (?, ?, ?)")
+        sqlx::query("INSERT INTO stderr (run_id, line, timestamp) VALUES (?, ?, ?)")
             .bind(&run_id.0)
             .bind(&line)
             .bind(timestamp)
             .execute(&self.pool)
-            .await
-        {
-            error!("failed to insert stderr line: {e}");
-        }
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -121,7 +113,7 @@ mod tests {
         let db = create_test_db().await;
         let host = Host("test-app.local".to_string());
 
-        let run_id = db.app_started(&host).await;
+        let run_id = db.app_started(&host).await.unwrap();
 
         // Verify via reporter that the run exists
         let response = db
@@ -136,8 +128,8 @@ mod tests {
         let db = create_test_db().await;
         let host = Host("test-app.local".to_string());
 
-        db.app_started(&host).await;
-        db.app_stopped(&host).await;
+        db.app_started(&host).await.unwrap();
+        db.app_stopped(&host).await.unwrap();
 
         // Verify via reporter - a stopped run should have awake time > 0
         let overview = db.app_overview(&host, None).await.unwrap();
@@ -149,8 +141,8 @@ mod tests {
         let db = create_test_db().await;
         let host = Host("test-app.local".to_string());
 
-        db.app_started(&host).await;
-        db.app_start_failed(&host).await;
+        db.app_started(&host).await.unwrap();
+        db.app_start_failed(&host).await.unwrap();
 
         let overview = db.app_overview(&host, None).await.unwrap();
         assert_eq!(overview.total_start_failures, 1);
@@ -161,10 +153,13 @@ mod tests {
         let db = create_test_db().await;
         let host = Host("test-app.local".to_string());
 
-        let run_id = db.app_started(&host).await;
+        let run_id = db.app_started(&host).await.unwrap();
         db.append_stdout(&run_id, "Hello from stdout".to_string())
-            .await;
-        db.append_stdout(&run_id, "Another line".to_string()).await;
+            .await
+            .unwrap();
+        db.append_stdout(&run_id, "Another line".to_string())
+            .await
+            .unwrap();
 
         let logs = db.run_logs(&run_id).await.unwrap();
         assert_eq!(logs.stdout.len(), 2);
@@ -177,11 +172,13 @@ mod tests {
         let db = create_test_db().await;
         let host = Host("test-app.local".to_string());
 
-        let run_id = db.app_started(&host).await;
+        let run_id = db.app_started(&host).await.unwrap();
         db.append_stderr(&run_id, "Error occurred".to_string())
-            .await;
+            .await
+            .unwrap();
         db.append_stderr(&run_id, "Stack trace here".to_string())
-            .await;
+            .await
+            .unwrap();
 
         let logs = db.run_logs(&run_id).await.unwrap();
         assert_eq!(logs.stderr.len(), 2);
@@ -195,9 +192,9 @@ mod tests {
         let host1 = Host("app1.local".to_string());
         let host2 = Host("app2.local".to_string());
 
-        db.app_started(&host1).await;
-        db.app_started(&host2).await;
-        db.app_stopped(&host1).await;
+        db.app_started(&host1).await.unwrap();
+        db.app_started(&host2).await.unwrap();
+        db.app_stopped(&host1).await.unwrap();
 
         let apps = db.apps_overview(None).await;
         assert_eq!(apps.len(), 2);

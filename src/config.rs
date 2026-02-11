@@ -247,11 +247,15 @@ pub struct RunOptions<C: Collector> {
 
 impl<C: Collector> RunOptions<C> {
     pub async fn append_stdout(&self, line: String) {
-        self.collector.append_stdout(&self.run_id, line).await;
+        if let Err(e) = self.collector.append_stdout(&self.run_id, line).await {
+            error!("failed to append stdout: {e}");
+        }
     }
 
     pub async fn append_stderr(&self, line: String) {
-        self.collector.append_stderr(&self.run_id, line).await;
+        if let Err(e) = self.collector.append_stderr(&self.run_id, line).await {
+            error!("failed to append stderr: {e}");
+        }
     }
 }
 
@@ -538,7 +542,12 @@ impl App {
 
         if needs_start {
             let address = guard.address;
-            let run_id = collector.app_started(host).await;
+            let run_id = collector.app_started(host).await.map_err(|e| {
+                pingora::Error::explain(
+                    pingora::ErrorType::ConnectError,
+                    format!("failed to record app start: {e}"),
+                )
+            })?;
 
             info!(%address, "app not running, starting it");
             guard.command.start(Some(RunOptions {
@@ -550,7 +559,9 @@ impl App {
 
             if app.read().await.wait_for_running().await.is_err() {
                 error!("failed to start app within timeout");
-                collector.app_start_failed(host).await;
+                if let Err(e) = collector.app_start_failed(host).await {
+                    error!("failed to record app start failure: {e}");
+                }
                 return Err(pingora::Error::explain(
                     pingora::ErrorType::ConnectError,
                     "failed to start app",
@@ -593,7 +604,12 @@ impl App {
         }
 
         // Need to start the app
-        let run_id = collector.app_started(host).await;
+        let run_id = collector.app_started(host).await.map_err(|e| {
+            pingora::Error::explain(
+                pingora::ErrorType::ConnectError,
+                format!("failed to record app start: {e}"),
+            )
+        })?;
         let address = guard.address;
 
         info!(%address, "app not running, starting it (non-blocking)");
@@ -613,7 +629,9 @@ impl App {
                 info!(host = %host, "app confirmed healthy in background");
             } else {
                 error!(host = %host, "app failed to start in background");
-                collector.app_start_failed(&host).await;
+                if let Err(e) = collector.app_start_failed(&host).await {
+                    error!(host = %host, "failed to record app start failure: {e}");
+                }
             }
         });
 
@@ -654,11 +672,15 @@ impl App {
                 guard.command.stop().await;
                 guard.confirmed_healthy = false;
                 drop(guard);
-                collector.app_stopped(&host).await;
+                if let Err(e) = collector.app_stopped(&host).await {
+                    error!("failed to record app stop: {e}");
+                }
 
                 if app.read().await.wait_for_stopped().await.is_err() {
                     error!("failed to stop app within timeout");
-                    collector.app_stop_failed(&host).await;
+                    if let Err(e) = collector.app_stop_failed(&host).await {
+                        error!("failed to record app stop failure: {e}");
+                    }
                 }
             })
         };

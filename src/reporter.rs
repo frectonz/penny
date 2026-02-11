@@ -516,14 +516,14 @@ mod tests {
         let host1 = Host("app1.local".to_string());
         let host2 = Host("app2.local".to_string());
 
-        db.app_started(&host1).await;
-        db.app_stopped(&host1).await;
+        db.app_started(&host1).await.unwrap();
+        db.app_stopped(&host1).await.unwrap();
 
-        db.app_started(&host2).await;
-        db.app_stopped(&host2).await;
+        db.app_started(&host2).await.unwrap();
+        db.app_stopped(&host2).await.unwrap();
 
-        db.app_started(&host1).await;
-        db.app_start_failed(&host1).await;
+        db.app_started(&host1).await.unwrap();
+        db.app_start_failed(&host1).await.unwrap();
 
         let overview = db.total_overview(None).await;
 
@@ -537,13 +537,13 @@ mod tests {
         let host1 = Host("app1.local".to_string());
         let host2 = Host("app2.local".to_string());
 
-        db.app_started(&host1).await;
-        db.app_stopped(&host1).await;
-        db.app_started(&host1).await;
-        db.app_stopped(&host1).await;
+        db.app_started(&host1).await.unwrap();
+        db.app_stopped(&host1).await.unwrap();
+        db.app_started(&host1).await.unwrap();
+        db.app_stopped(&host1).await.unwrap();
 
-        db.app_started(&host2).await;
-        db.app_stopped(&host2).await;
+        db.app_started(&host2).await.unwrap();
+        db.app_stopped(&host2).await.unwrap();
 
         let overview = db.apps_overview(None).await;
 
@@ -573,14 +573,14 @@ mod tests {
         let host = Host("myapp.local".to_string());
         let other = Host("other.local".to_string());
 
-        db.app_started(&host).await;
-        db.app_stopped(&host).await;
+        db.app_started(&host).await.unwrap();
+        db.app_stopped(&host).await.unwrap();
 
-        db.app_started(&host).await;
-        db.app_start_failed(&host).await;
+        db.app_started(&host).await.unwrap();
+        db.app_start_failed(&host).await.unwrap();
 
-        db.app_started(&other).await;
-        db.app_stopped(&other).await;
+        db.app_started(&other).await.unwrap();
+        db.app_stopped(&other).await.unwrap();
 
         let overview = db.app_overview(&host, None).await;
 
@@ -596,14 +596,14 @@ mod tests {
         let db = create_test_db().await;
         let host = Host("myapp.local".to_string());
 
-        let run_id1 = db.app_started(&host).await;
-        db.app_stopped(&host).await;
+        let run_id1 = db.app_started(&host).await.unwrap();
+        db.app_stopped(&host).await.unwrap();
 
-        let run_id2 = db.app_started(&host).await;
-        db.app_stopped(&host).await;
+        let run_id2 = db.app_started(&host).await.unwrap();
+        db.app_stopped(&host).await.unwrap();
 
-        let run_id3 = db.app_started(&host).await;
-        db.app_stopped(&host).await;
+        let run_id3 = db.app_started(&host).await.unwrap();
+        db.app_stopped(&host).await.unwrap();
 
         let response = db.app_runs(&host, None, PaginationParams::default()).await;
 
@@ -622,11 +622,11 @@ mod tests {
         let host1 = Host("app1.local".to_string());
         let host2 = Host("app2.local".to_string());
 
-        db.app_started(&host1).await;
-        db.app_stopped(&host1).await;
+        db.app_started(&host1).await.unwrap();
+        db.app_stopped(&host1).await.unwrap();
 
-        db.app_started(&host2).await;
-        db.app_stopped(&host2).await;
+        db.app_started(&host2).await.unwrap();
+        db.app_stopped(&host2).await.unwrap();
 
         let response = db.app_runs(&host1, None, PaginationParams::default()).await;
 
@@ -649,10 +649,16 @@ mod tests {
         let db = create_test_db().await;
         let host = Host("test.local".to_string());
 
-        let run_id = db.app_started(&host).await;
-        db.append_stdout(&run_id, "stdout line 1".to_string()).await;
-        db.append_stdout(&run_id, "stdout line 2".to_string()).await;
-        db.append_stderr(&run_id, "stderr line 1".to_string()).await;
+        let run_id = db.app_started(&host).await.unwrap();
+        db.append_stdout(&run_id, "stdout line 1".to_string())
+            .await
+            .unwrap();
+        db.append_stdout(&run_id, "stdout line 2".to_string())
+            .await
+            .unwrap();
+        db.append_stderr(&run_id, "stderr line 1".to_string())
+            .await
+            .unwrap();
 
         let logs = db.run_logs(&run_id).await;
 
@@ -670,7 +676,7 @@ mod tests {
         let db = create_test_db().await;
         let host = Host("test.local".to_string());
 
-        let run_id = db.app_started(&host).await;
+        let run_id = db.app_started(&host).await.unwrap();
 
         let logs = db.run_logs(&run_id).await;
 
@@ -687,8 +693,8 @@ mod tests {
 
         // Create 5 runs
         for _ in 0..5 {
-            db.app_started(&host).await;
-            db.app_stopped(&host).await;
+            db.app_started(&host).await.unwrap();
+            db.app_stopped(&host).await.unwrap();
         }
 
         let pagination = PaginationParams {
@@ -709,8 +715,8 @@ mod tests {
 
         // Create 5 runs with small delays to ensure unique timestamps for cursor pagination
         for _ in 0..5 {
-            db.app_started(&host).await;
-            db.app_stopped(&host).await;
+            db.app_started(&host).await.unwrap();
+            db.app_stopped(&host).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_millis(2)).await;
         }
 

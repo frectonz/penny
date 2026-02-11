@@ -13,19 +13,29 @@ pub struct NoOpCollector;
 
 #[async_trait::async_trait]
 impl Collector for NoOpCollector {
-    async fn app_started(&self, _host: &Host) -> RunId {
-        RunId::default()
+    async fn app_started(&self, _host: &Host) -> color_eyre::Result<RunId> {
+        Ok(RunId::default())
     }
 
-    async fn app_stopped(&self, _host: &Host) {}
+    async fn app_stopped(&self, _host: &Host) -> color_eyre::Result<()> {
+        Ok(())
+    }
 
-    async fn app_start_failed(&self, _host: &Host) {}
+    async fn app_start_failed(&self, _host: &Host) -> color_eyre::Result<()> {
+        Ok(())
+    }
 
-    async fn app_stop_failed(&self, _host: &Host) {}
+    async fn app_stop_failed(&self, _host: &Host) -> color_eyre::Result<()> {
+        Ok(())
+    }
 
-    async fn append_stdout(&self, _run_id: &RunId, _line: String) {}
+    async fn append_stdout(&self, _run_id: &RunId, _line: String) -> color_eyre::Result<()> {
+        Ok(())
+    }
 
-    async fn append_stderr(&self, _run_id: &RunId, _line: String) {}
+    async fn append_stderr(&self, _run_id: &RunId, _line: String) -> color_eyre::Result<()> {
+        Ok(())
+    }
 }
 
 /// Tracks check results for a single app.
