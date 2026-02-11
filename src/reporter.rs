@@ -6,6 +6,165 @@ use tracing::error;
 use crate::db::SqliteDatabase;
 use crate::types::{Host, RunId};
 
+mod queries {
+    pub const TOTAL_OVERVIEW: &str = r#"
+            WITH ordered_runs AS (
+                SELECT
+                    started_at,
+                    stopped_at,
+                    start_failed,
+                    stop_failed,
+                    LAG(stopped_at) OVER (ORDER BY started_at) as prev_stopped_at
+                FROM runs
+                WHERE ($1 IS NULL OR started_at >= $1)
+                  AND ($2 IS NULL OR started_at <= $2)
+            ),
+            current_sleep AS (
+                SELECT
+                    CASE
+                        WHEN NOT EXISTS (SELECT 1 FROM runs WHERE stopped_at IS NULL)
+                        THEN CAST(strftime('%s', 'now') * 1000 AS INTEGER) -
+                             (SELECT MAX(stopped_at) FROM runs)
+                        ELSE 0
+                    END as ongoing_sleep_ms
+            )
+            SELECT
+                COUNT(*) as total_runs,
+                COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
+                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0)
+                    + (SELECT ongoing_sleep_ms FROM current_sleep) as total_sleep_time_ms,
+                COALESCE(SUM(start_failed), 0) as total_start_failures,
+                COALESCE(SUM(stop_failed), 0) as total_stop_failures
+            FROM ordered_runs
+        "#;
+
+    pub const APPS_OVERVIEW: &str = r#"
+            WITH ordered_runs AS (
+                SELECT
+                    host,
+                    run_id,
+                    started_at,
+                    stopped_at,
+                    start_failed,
+                    stop_failed,
+                    LAG(stopped_at) OVER (PARTITION BY host ORDER BY started_at) as prev_stopped_at
+                FROM runs
+                WHERE ($1 IS NULL OR started_at >= $1)
+                  AND ($2 IS NULL OR started_at <= $2)
+            ),
+            latest_per_host AS (
+                SELECT
+                    host,
+                    MAX(stopped_at) as last_stopped_at,
+                    MAX(CASE WHEN stopped_at IS NULL THEN 1 ELSE 0 END) as has_running
+                FROM runs
+                GROUP BY host
+            ),
+            current_sleep_per_host AS (
+                SELECT
+                    host,
+                    CASE
+                        WHEN has_running = 0 AND last_stopped_at IS NOT NULL
+                        THEN CAST(strftime('%s', 'now') * 1000 AS INTEGER) - last_stopped_at
+                        ELSE 0
+                    END as ongoing_sleep_ms
+                FROM latest_per_host
+            )
+            SELECT
+                o.host,
+                COUNT(*) as total_runs,
+                COALESCE(SUM(CASE WHEN o.stopped_at IS NOT NULL THEN o.stopped_at - o.started_at ELSE 0 END), 0) as total_awake_time_ms,
+                COALESCE(SUM(CASE WHEN o.prev_stopped_at IS NOT NULL AND o.started_at > o.prev_stopped_at THEN o.started_at - o.prev_stopped_at ELSE 0 END), 0)
+                    + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep_per_host WHERE host = o.host), 0) as total_sleep_time_ms,
+                COALESCE(SUM(o.start_failed), 0) as total_start_failures,
+                COALESCE(SUM(o.stop_failed), 0) as total_stop_failures,
+                COALESCE((SELECT has_running FROM latest_per_host WHERE host = o.host), 0) as is_running,
+                MAX(o.started_at) as last_run_at
+            FROM ordered_runs o
+            GROUP BY o.host
+            ORDER BY o.host
+        "#;
+
+    pub const APP_OVERVIEW: &str = r#"
+            WITH ordered_runs AS (
+                SELECT
+                    host,
+                    run_id,
+                    started_at,
+                    stopped_at,
+                    start_failed,
+                    stop_failed,
+                    LAG(stopped_at) OVER (ORDER BY started_at) as prev_stopped_at
+                FROM runs
+                WHERE host = $1
+                  AND ($2 IS NULL OR started_at >= $2)
+                  AND ($3 IS NULL OR started_at <= $3)
+            ),
+            latest_info AS (
+                SELECT
+                    MAX(stopped_at) as last_stopped_at,
+                    MAX(CASE WHEN stopped_at IS NULL THEN 1 ELSE 0 END) as has_running
+                FROM runs
+                WHERE host = $1
+            ),
+            current_sleep AS (
+                SELECT
+                    CASE
+                        WHEN has_running = 0 AND last_stopped_at IS NOT NULL
+                        THEN CAST(strftime('%s', 'now') * 1000 AS INTEGER) - last_stopped_at
+                        ELSE 0
+                    END as ongoing_sleep_ms
+                FROM latest_info
+            )
+            SELECT
+                COUNT(*) as total_runs,
+                COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
+                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0)
+                    + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep), 0) as total_sleep_time_ms,
+                COALESCE(SUM(start_failed), 0) as total_start_failures,
+                COALESCE(SUM(stop_failed), 0) as total_stop_failures,
+                COALESCE((SELECT has_running FROM latest_info), 0) as is_running,
+                MAX(started_at) as last_run_at
+            FROM ordered_runs
+        "#;
+
+    pub const APP_RUNS: &str = r#"
+            SELECT
+                r.run_id,
+                r.started_at,
+                COALESCE(r.stopped_at, CAST(strftime('%s', 'now') * 1000 AS INTEGER)) as end_time,
+                CASE
+                    WHEN r.stopped_at IS NOT NULL THEN r.stopped_at - r.started_at
+                    ELSE CAST(strftime('%s', 'now') * 1000 AS INTEGER) - r.started_at
+                END as awake_time,
+                (SELECT COUNT(*) FROM stdout WHERE run_id = r.run_id) as stdout_lines,
+                (SELECT COUNT(*) FROM stderr WHERE run_id = r.run_id) as stderr_lines
+            FROM runs r
+            WHERE r.host = $1
+              AND ($2 IS NULL OR r.started_at >= $2)
+              AND ($3 IS NULL OR r.started_at <= $3)
+              AND ($4 IS NULL OR r.started_at < $4)
+            ORDER BY r.started_at DESC
+            LIMIT $5
+        "#;
+
+    pub const RUN_EXISTS: &str = "SELECT 1 FROM runs WHERE run_id = $1";
+
+    pub const RUN_STDOUT: &str = r#"
+            SELECT line, timestamp
+            FROM stdout
+            WHERE run_id = $1
+            ORDER BY timestamp ASC
+        "#;
+
+    pub const RUN_STDERR: &str = r#"
+            SELECT line, timestamp
+            FROM stderr
+            WHERE run_id = $1
+            ORDER BY timestamp ASC
+        "#;
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TimeRange {
     pub start: Option<i64>,
@@ -102,38 +261,7 @@ impl Reporter for SqliteDatabase {
     async fn total_overview(&self, time_range: Option<TimeRange>) -> TotalOverview {
         let time_range = time_range.unwrap_or_default();
 
-        let query = r#"
-            WITH ordered_runs AS (
-                SELECT
-                    started_at,
-                    stopped_at,
-                    start_failed,
-                    stop_failed,
-                    LAG(stopped_at) OVER (ORDER BY started_at) as prev_stopped_at
-                FROM runs
-                WHERE ($1 IS NULL OR started_at >= $1)
-                  AND ($2 IS NULL OR started_at <= $2)
-            ),
-            current_sleep AS (
-                SELECT
-                    CASE
-                        WHEN NOT EXISTS (SELECT 1 FROM runs WHERE stopped_at IS NULL)
-                        THEN CAST(strftime('%s', 'now') * 1000 AS INTEGER) -
-                             (SELECT MAX(stopped_at) FROM runs)
-                        ELSE 0
-                    END as ongoing_sleep_ms
-            )
-            SELECT
-                COUNT(*) as total_runs,
-                COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
-                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0)
-                    + (SELECT ongoing_sleep_ms FROM current_sleep) as total_sleep_time_ms,
-                COALESCE(SUM(start_failed), 0) as total_start_failures,
-                COALESCE(SUM(stop_failed), 0) as total_stop_failures
-            FROM ordered_runs
-        "#;
-
-        let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64)>(query)
+        let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64)>(queries::TOTAL_OVERVIEW)
             .bind(time_range.start)
             .bind(time_range.end)
             .fetch_one(&self.pool)
@@ -163,58 +291,13 @@ impl Reporter for SqliteDatabase {
     async fn apps_overview(&self, time_range: Option<TimeRange>) -> Vec<AppOverview> {
         let time_range = time_range.unwrap_or_default();
 
-        let query = r#"
-            WITH ordered_runs AS (
-                SELECT
-                    host,
-                    run_id,
-                    started_at,
-                    stopped_at,
-                    start_failed,
-                    stop_failed,
-                    LAG(stopped_at) OVER (PARTITION BY host ORDER BY started_at) as prev_stopped_at
-                FROM runs
-                WHERE ($1 IS NULL OR started_at >= $1)
-                  AND ($2 IS NULL OR started_at <= $2)
-            ),
-            latest_per_host AS (
-                SELECT
-                    host,
-                    MAX(stopped_at) as last_stopped_at,
-                    MAX(CASE WHEN stopped_at IS NULL THEN 1 ELSE 0 END) as has_running
-                FROM runs
-                GROUP BY host
-            ),
-            current_sleep_per_host AS (
-                SELECT
-                    host,
-                    CASE
-                        WHEN has_running = 0 AND last_stopped_at IS NOT NULL
-                        THEN CAST(strftime('%s', 'now') * 1000 AS INTEGER) - last_stopped_at
-                        ELSE 0
-                    END as ongoing_sleep_ms
-                FROM latest_per_host
-            )
-            SELECT
-                o.host,
-                COUNT(*) as total_runs,
-                COALESCE(SUM(CASE WHEN o.stopped_at IS NOT NULL THEN o.stopped_at - o.started_at ELSE 0 END), 0) as total_awake_time_ms,
-                COALESCE(SUM(CASE WHEN o.prev_stopped_at IS NOT NULL AND o.started_at > o.prev_stopped_at THEN o.started_at - o.prev_stopped_at ELSE 0 END), 0)
-                    + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep_per_host WHERE host = o.host), 0) as total_sleep_time_ms,
-                COALESCE(SUM(o.start_failed), 0) as total_start_failures,
-                COALESCE(SUM(o.stop_failed), 0) as total_stop_failures,
-                COALESCE((SELECT has_running FROM latest_per_host WHERE host = o.host), 0) as is_running,
-                MAX(o.started_at) as last_run_at
-            FROM ordered_runs o
-            GROUP BY o.host
-            ORDER BY o.host
-        "#;
-
-        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64, i64, i64)>(query)
-            .bind(time_range.start)
-            .bind(time_range.end)
-            .fetch_all(&self.pool)
-            .await;
+        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64, i64, i64)>(
+            queries::APPS_OVERVIEW,
+        )
+        .bind(time_range.start)
+        .bind(time_range.end)
+        .fetch_all(&self.pool)
+        .await;
 
         match rows {
             Ok(rows) => rows
@@ -255,50 +338,7 @@ impl Reporter for SqliteDatabase {
     ) -> Option<AppOverview> {
         let time_range = time_range.unwrap_or_default();
 
-        let query = r#"
-            WITH ordered_runs AS (
-                SELECT
-                    host,
-                    run_id,
-                    started_at,
-                    stopped_at,
-                    start_failed,
-                    stop_failed,
-                    LAG(stopped_at) OVER (ORDER BY started_at) as prev_stopped_at
-                FROM runs
-                WHERE host = $1
-                  AND ($2 IS NULL OR started_at >= $2)
-                  AND ($3 IS NULL OR started_at <= $3)
-            ),
-            latest_info AS (
-                SELECT
-                    MAX(stopped_at) as last_stopped_at,
-                    MAX(CASE WHEN stopped_at IS NULL THEN 1 ELSE 0 END) as has_running
-                FROM runs
-                WHERE host = $1
-            ),
-            current_sleep AS (
-                SELECT
-                    CASE
-                        WHEN has_running = 0 AND last_stopped_at IS NOT NULL
-                        THEN CAST(strftime('%s', 'now') * 1000 AS INTEGER) - last_stopped_at
-                        ELSE 0
-                    END as ongoing_sleep_ms
-                FROM latest_info
-            )
-            SELECT
-                COUNT(*) as total_runs,
-                COALESCE(SUM(CASE WHEN stopped_at IS NOT NULL THEN stopped_at - started_at ELSE 0 END), 0) as total_awake_time_ms,
-                COALESCE(SUM(CASE WHEN prev_stopped_at IS NOT NULL AND started_at > prev_stopped_at THEN started_at - prev_stopped_at ELSE 0 END), 0)
-                    + COALESCE((SELECT ongoing_sleep_ms FROM current_sleep), 0) as total_sleep_time_ms,
-                COALESCE(SUM(start_failed), 0) as total_start_failures,
-                COALESCE(SUM(stop_failed), 0) as total_stop_failures,
-                COALESCE((SELECT has_running FROM latest_info), 0) as is_running,
-                MAX(started_at) as last_run_at
-            FROM ordered_runs
-        "#;
-
-        let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64)>(query)
+        let row = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64)>(queries::APP_OVERVIEW)
             .bind(&host.0)
             .bind(time_range.start)
             .bind(time_range.end)
@@ -347,27 +387,7 @@ impl Reporter for SqliteDatabase {
         let limit = pagination.limit.unwrap_or(20) as i64;
         let fetch_limit = limit + 1; // Fetch one extra to detect if more pages exist
 
-        let query = r#"
-            SELECT
-                r.run_id,
-                r.started_at,
-                COALESCE(r.stopped_at, CAST(strftime('%s', 'now') * 1000 AS INTEGER)) as end_time,
-                CASE
-                    WHEN r.stopped_at IS NOT NULL THEN r.stopped_at - r.started_at
-                    ELSE CAST(strftime('%s', 'now') * 1000 AS INTEGER) - r.started_at
-                END as awake_time,
-                (SELECT COUNT(*) FROM stdout WHERE run_id = r.run_id) as stdout_lines,
-                (SELECT COUNT(*) FROM stderr WHERE run_id = r.run_id) as stderr_lines
-            FROM runs r
-            WHERE r.host = $1
-              AND ($2 IS NULL OR r.started_at >= $2)
-              AND ($3 IS NULL OR r.started_at <= $3)
-              AND ($4 IS NULL OR r.started_at < $4)
-            ORDER BY r.started_at DESC
-            LIMIT $5
-        "#;
-
-        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64)>(query)
+        let rows = sqlx::query_as::<_, (String, i64, i64, i64, i64, i64)>(queries::APP_RUNS)
             .bind(&host.0)
             .bind(time_range.start)
             .bind(time_range.end)
@@ -429,8 +449,7 @@ impl Reporter for SqliteDatabase {
     }
 
     async fn run_logs(&self, run_id: &RunId) -> Option<RunLogs> {
-        let exists_query = "SELECT 1 FROM runs WHERE run_id = $1";
-        let exists = sqlx::query_scalar::<_, i32>(exists_query)
+        let exists = sqlx::query_scalar::<_, i32>(queries::RUN_EXISTS)
             .bind(&run_id.0)
             .fetch_optional(&self.pool)
             .await
@@ -442,21 +461,7 @@ impl Reporter for SqliteDatabase {
             return None;
         }
 
-        let stdout_query = r#"
-            SELECT line, timestamp
-            FROM stdout
-            WHERE run_id = $1
-            ORDER BY timestamp ASC
-        "#;
-
-        let stderr_query = r#"
-            SELECT line, timestamp
-            FROM stderr
-            WHERE run_id = $1
-            ORDER BY timestamp ASC
-        "#;
-
-        let stdout = sqlx::query_as::<_, (String, i64)>(stdout_query)
+        let stdout = sqlx::query_as::<_, (String, i64)>(queries::RUN_STDOUT)
             .bind(&run_id.0)
             .fetch_all(&self.pool)
             .await
@@ -470,7 +475,7 @@ impl Reporter for SqliteDatabase {
                 Vec::new()
             });
 
-        let stderr = sqlx::query_as::<_, (String, i64)>(stderr_query)
+        let stderr = sqlx::query_as::<_, (String, i64)>(queries::RUN_STDERR)
             .bind(&run_id.0)
             .fetch_all(&self.pool)
             .await
