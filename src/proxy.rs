@@ -26,6 +26,60 @@ where
             challenge_store,
         }
     }
+
+    async fn handle_acme_challenge(
+        &self,
+        session: &mut pingora::prelude::Session,
+        path: &str,
+    ) -> pingora::Result<Option<bool>> {
+        if path.starts_with("/.well-known/acme-challenge/") {
+            let token = path.trim_start_matches("/.well-known/acme-challenge/");
+            if let Some(key_auth) = get_challenge(&self.challenge_store, token).await {
+                debug!(token = %token, "responding to ACME challenge");
+                return Ok(Some(respond_to_acme_challenge(session, &key_auth).await?));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn handle_cold_start(
+        &self,
+        session: &mut pingora::prelude::Session,
+        proxy_ctx: &ProxyContext,
+        app: &Arc<RwLock<App>>,
+        cold_start_page_html: Option<&str>,
+    ) -> pingora::Result<Option<bool>> {
+        let is_ready = App::begin_start_app(&proxy_ctx.host, app, self.collector.clone()).await?;
+        App::schedule_kill(&proxy_ctx.host, app, self.collector.clone()).await;
+        if !is_ready {
+            return Ok(Some(
+                respond_with_loading_page(session, &proxy_ctx.host.0, cold_start_page_html).await?,
+            ));
+        }
+        Ok(None)
+    }
+
+    fn warm_related_apps(&self, also_warm: Vec<String>) {
+        for hostname in also_warm {
+            if let Some(related_app) = self.config.apps.get(&hostname) {
+                let related_app = related_app.clone();
+                let host = Host(hostname.clone());
+                let collector = self.collector.clone();
+                tokio::spawn(async move {
+                    info!(host = %host, "warming related app");
+                    if let Err(e) =
+                        App::begin_start_app(&host, &related_app, collector.clone()).await
+                    {
+                        warn!(host = %host, error = %e, "failed to warm related app");
+                        return;
+                    }
+                    App::schedule_kill(&host, &related_app, collector).await;
+                });
+            } else {
+                warn!(hostname = %hostname, "also_warm target not found in config");
+            }
+        }
+    }
 }
 
 /// Responds to an ACME HTTP-01 challenge request.
@@ -258,24 +312,21 @@ where
         session: &mut pingora::prelude::Session,
         ctx: &mut Self::CTX,
     ) -> pingora::Result<bool> {
-        let path = session.req_header().uri.path();
+        let path = session.req_header().uri.path().to_owned();
 
-        // Check for ACME challenge requests before normal routing
-        if path.starts_with("/.well-known/acme-challenge/") {
-            let token = path.trim_start_matches("/.well-known/acme-challenge/");
-            if let Some(key_auth) = get_challenge(&self.challenge_store, token).await {
-                debug!(token = %token, "responding to ACME challenge");
-                return respond_to_acme_challenge(session, &key_auth).await;
-            }
+        if let Some(result) = self.handle_acme_challenge(session, &path).await? {
+            return Ok(result);
         }
 
-        let host = get_host(session).ok_or_else(|| {
-            warn!("request missing host header");
-            pingora::Error::explain(pingora::ErrorType::InvalidHTTPHeader, "failed to get host")
-        })?;
+        let host = get_host(session)
+            .ok_or_else(|| {
+                warn!("request missing host header");
+                pingora::Error::explain(pingora::ErrorType::InvalidHTTPHeader, "failed to get host")
+            })?
+            .to_owned();
 
         debug!(host = %host, "processing request");
-        *ctx = self.config.get_proxy_context(host).await;
+        *ctx = self.config.get_proxy_context(&host).await;
 
         if let Some(proxy_ctx) = ctx.as_ref()
             && let Some(app) = &proxy_ctx.app
@@ -286,39 +337,16 @@ where
             let also_warm = guard.also_warm.clone();
             drop(guard);
 
-            if cold_start_page && is_browser_navigation(session) {
-                let is_ready =
-                    App::begin_start_app(&proxy_ctx.host, app, self.collector.clone()).await?;
-                App::schedule_kill(&proxy_ctx.host, app, self.collector.clone()).await;
-                if !is_ready {
-                    return respond_with_loading_page(
-                        session,
-                        &proxy_ctx.host.0,
-                        cold_start_page_html.as_deref(),
-                    )
-                    .await;
-                }
+            if cold_start_page
+                && is_browser_navigation(session)
+                && let Some(result) = self
+                    .handle_cold_start(session, proxy_ctx, app, cold_start_page_html.as_deref())
+                    .await?
+            {
+                return Ok(result);
             }
 
-            for hostname in also_warm {
-                if let Some(related_app) = self.config.apps.get(&hostname) {
-                    let related_app = related_app.clone();
-                    let host = Host(hostname.clone());
-                    let collector = self.collector.clone();
-                    tokio::spawn(async move {
-                        info!(host = %host, "warming related app");
-                        if let Err(e) =
-                            App::begin_start_app(&host, &related_app, collector.clone()).await
-                        {
-                            warn!(host = %host, error = %e, "failed to warm related app");
-                            return;
-                        }
-                        App::schedule_kill(&host, &related_app, collector).await;
-                    });
-                } else {
-                    warn!(hostname = %hostname, "also_warm target not found in config");
-                }
-            }
+            self.warm_related_apps(also_warm);
         }
 
         if ctx.is_none() {
