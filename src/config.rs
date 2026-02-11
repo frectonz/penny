@@ -525,6 +525,18 @@ impl App {
         result
     }
 
+    async fn wait_for_healthy(app: &Arc<RwLock<App>>) -> pingora::Result<()> {
+        if app.read().await.wait_for_running().await.is_err() {
+            error!("failed to start app within timeout");
+            return Err(pingora::Error::explain(
+                pingora::ErrorType::ConnectError,
+                "failed to start app",
+            ));
+        }
+        app.write().await.confirmed_healthy = true;
+        Ok(())
+    }
+
     #[instrument(skip(app))]
     pub async fn start_app(
         host: &Host,
@@ -541,15 +553,7 @@ impl App {
             }
             // cold_start_page app started by loading page flow, not yet confirmed healthy
             drop(guard);
-            if app.read().await.wait_for_running().await.is_err() {
-                error!("failed to start app within timeout");
-                return Err(pingora::Error::explain(
-                    pingora::ErrorType::ConnectError,
-                    "failed to start app",
-                ));
-            }
-            app.write().await.confirmed_healthy = true;
-            return Ok(());
+            return Self::wait_for_healthy(app).await;
         }
 
         // Slow path: no running child, do health check to confirm app state
@@ -571,18 +575,12 @@ impl App {
             }));
 
             drop(guard);
-
-            if app.read().await.wait_for_running().await.is_err() {
-                error!("failed to start app within timeout");
+            if let Err(e) = Self::wait_for_healthy(app).await {
                 if let Err(e) = collector.app_start_failed(host).await {
                     error!("failed to record app start failure: {e}");
                 }
-                return Err(pingora::Error::explain(
-                    pingora::ErrorType::ConnectError,
-                    "failed to start app",
-                ));
+                return Err(e);
             }
-            app.write().await.confirmed_healthy = true;
         } else {
             let address = guard.address;
             debug!(%address, "app already running");
