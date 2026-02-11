@@ -147,7 +147,22 @@ pub struct App {
     pub confirmed_healthy: bool,
 
     #[serde(skip)]
-    pub kill_task: Option<tokio::task::JoinHandle<()>>,
+    pub kill_task: Option<KillTask>,
+}
+
+/// Handle for a scheduled kill task. Dropping the `cancel` sender
+/// cancels only the sleep phase; the stop/cleanup phase runs to completion.
+pub struct KillTask {
+    // Dropped to signal cancellation — never read directly.
+    #[allow(dead_code)]
+    cancel: tokio::sync::oneshot::Sender<()>,
+    _handle: tokio::task::JoinHandle<()>,
+}
+
+impl std::fmt::Debug for KillTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KillTask").finish()
+    }
 }
 
 pub fn default_wait_period() -> SignedDuration {
@@ -642,9 +657,9 @@ impl App {
     pub async fn schedule_kill(host: &Host, app: &Arc<RwLock<App>>, collector: impl Collector) {
         let mut app_guard = app.write().await;
 
-        if let Some(task) = app_guard.kill_task.take() {
-            debug!("aborting previous kill task");
-            task.abort();
+        if let Some(prev) = app_guard.kill_task.take() {
+            debug!("cancelling previous kill task");
+            drop(prev);
         }
 
         app_guard.request_tracker.record_request();
@@ -660,12 +675,24 @@ impl App {
             "scheduling app shutdown"
         );
 
+        let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
+
         let handle = {
             let app = app.clone();
             let host = host.clone();
             tokio::spawn(async move {
                 let wait_period = app.read().await.effective_wait_period();
-                pingora::time::sleep(wait_period).await;
+
+                // CANCELLABLE: sleep races against cancellation
+                tokio::select! {
+                    _ = pingora::time::sleep(wait_period) => {}
+                    _ = cancel_rx => {
+                        debug!("kill task cancelled during sleep");
+                        return;
+                    }
+                }
+
+                // CRITICAL SECTION: runs to completion, never aborted
                 info!("wait period elapsed, stopping app");
 
                 let mut guard = app.write().await;
@@ -685,7 +712,10 @@ impl App {
             })
         };
 
-        app_guard.kill_task = Some(handle);
+        app_guard.kill_task = Some(KillTask {
+            cancel: cancel_tx,
+            _handle: handle,
+        });
     }
 }
 
