@@ -467,13 +467,15 @@ impl App {
         is_ok
     }
 
+    fn retry_strategy(&self) -> impl Iterator<Item = Duration> {
+        tokio_retry::strategy::ExponentialBackoff::from_millis(self.health_check_initial_backoff_ms)
+            .max_delay(Duration::from_secs(self.health_check_max_backoff_secs))
+            .map(tokio_retry::strategy::jitter)
+    }
+
     #[instrument(skip(self), fields(timeout = ?self.start_timeout))]
     pub async fn wait_for_running(&self) -> Result<(), pingora::time::Elapsed> {
-        let strategy = tokio_retry::strategy::ExponentialBackoff::from_millis(
-            self.health_check_initial_backoff_ms,
-        )
-        .max_delay(Duration::from_secs(self.health_check_max_backoff_secs))
-        .map(tokio_retry::strategy::jitter);
+        let strategy = self.retry_strategy();
 
         debug!("waiting for app to become ready");
         let wait_for_running = tokio_retry::Retry::spawn(strategy, async || -> Result<(), ()> {
@@ -498,11 +500,7 @@ impl App {
 
     #[instrument(skip(self), fields(timeout = ?self.start_timeout))]
     pub async fn wait_for_stopped(&self) -> Result<(), pingora::time::Elapsed> {
-        let strategy = tokio_retry::strategy::ExponentialBackoff::from_millis(
-            self.health_check_initial_backoff_ms,
-        )
-        .max_delay(Duration::from_secs(self.health_check_max_backoff_secs))
-        .map(tokio_retry::strategy::jitter);
+        let strategy = self.retry_strategy();
 
         debug!("waiting for app to stop");
         let wait_for_stopping = tokio_retry::Retry::spawn(strategy, async || -> Result<(), ()> {
