@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -148,6 +149,9 @@ pub struct App {
 
     #[serde(skip)]
     pub kill_task: Option<KillTask>,
+
+    #[serde(skip, default = "default_health_checker")]
+    pub health_checker: Box<dyn HealthChecker>,
 }
 
 /// Handle for a scheduled kill task. Dropping the `cancel` sender
@@ -412,6 +416,38 @@ impl AppCommand {
 
 static HTTP: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(reqwest::Client::new);
 
+#[async_trait::async_trait]
+pub trait HealthChecker: Send + Sync + Debug {
+    async fn check(&self, address: SocketAddr, path: &str) -> bool;
+}
+
+#[derive(Debug)]
+pub struct HttpHealthChecker;
+
+#[async_trait::async_trait]
+impl HealthChecker for HttpHealthChecker {
+    async fn check(&self, address: SocketAddr, path: &str) -> bool {
+        let url = format!("http://{address}{path}");
+        debug!(url = %url, "performing health check");
+
+        let resp = HTTP
+            .get(&url)
+            .send()
+            .await
+            .ok()
+            .map(|r| r.status())
+            .unwrap_or_else(|| http::StatusCode::SERVICE_UNAVAILABLE);
+
+        let is_ok = resp == http::StatusCode::OK;
+        debug!(status = %resp, is_running = is_ok, "health check result");
+        is_ok
+    }
+}
+
+fn default_health_checker() -> Box<dyn HealthChecker> {
+    Box::new(HttpHealthChecker)
+}
+
 impl App {
     pub fn effective_wait_period(&self) -> Duration {
         if !self.adaptive_wait {
@@ -446,25 +482,9 @@ impl App {
 
     #[instrument(skip(self), fields(address = %self.address, health_check = %self.health_check))]
     pub async fn is_running(&self) -> bool {
-        let address = self.address;
-        let health_check_path = self.health_check.as_str();
-
-        let health_check_url = format!("http://{address}{health_check_path}");
-
-        debug!(url = %health_check_url, "performing health check");
-
-        let resp = HTTP
-            .get(&health_check_url)
-            .send()
+        self.health_checker
+            .check(self.address, &self.health_check)
             .await
-            .ok()
-            .map(|r| r.status())
-            .unwrap_or_else(|| http::StatusCode::SERVICE_UNAVAILABLE);
-
-        let is_ok = resp == http::StatusCode::OK;
-        debug!(status = %resp, is_running = is_ok, "health check result");
-
-        is_ok
     }
 
     fn retry_strategy(&self) -> impl Iterator<Item = Duration> {
