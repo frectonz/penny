@@ -137,9 +137,11 @@ mod queries {
                     WHEN r.stopped_at IS NOT NULL THEN r.stopped_at - r.started_at
                     ELSE CAST(strftime('%s', 'now') * 1000 AS INTEGER) - r.started_at
                 END as awake_time,
-                (SELECT COUNT(*) FROM stdout WHERE run_id = r.run_id) as stdout_lines,
-                (SELECT COUNT(*) FROM stderr WHERE run_id = r.run_id) as stderr_lines
+                COALESCE(so.cnt, 0) as stdout_lines,
+                COALESCE(se.cnt, 0) as stderr_lines
             FROM runs r
+            LEFT JOIN (SELECT run_id, COUNT(*) as cnt FROM stdout GROUP BY run_id) so ON so.run_id = r.run_id
+            LEFT JOIN (SELECT run_id, COUNT(*) as cnt FROM stderr GROUP BY run_id) se ON se.run_id = r.run_id
             WHERE r.host = $1
               AND ($2 IS NULL OR r.started_at >= $2)
               AND ($3 IS NULL OR r.started_at <= $3)
