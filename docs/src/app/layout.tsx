@@ -36,6 +36,24 @@ export const metadata: Metadata = {
     title: "Penny - Serverless for your servers",
     description:
       "A reverse proxy that starts your apps on demand and kills them when idle.",
+    images: {
+      url: "/og/home/image.png",
+      width: 1200,
+      height: 630,
+      alt: "Penny - Serverless for your servers",
+    },
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Penny - Serverless for your servers",
+    description:
+      "A reverse proxy that starts your apps on demand and kills them when idle.",
+    images: {
+      url: "/og/home/image.png",
+      width: 1200,
+      height: 630,
+      alt: "Penny - Serverless for your servers",
+    },
   },
 };
 

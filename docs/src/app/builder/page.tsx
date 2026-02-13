@@ -4,6 +4,26 @@ import { TomlBuilder } from "@/components/toml-builder";
 export const metadata: Metadata = {
   title: "Builder",
   description: "Interactive penny.toml configuration builder",
+  openGraph: {
+    siteName: "Penny",
+    images: {
+      url: "/og/builder/image.png",
+      width: 1200,
+      height: 630,
+      alt: "Penny - Interactive penny.toml Configuration Builder",
+    },
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Builder | Penny",
+    description: "Interactive penny.toml configuration builder",
+    images: {
+      url: "/og/builder/image.png",
+      width: 1200,
+      height: 630,
+      alt: "Penny - Interactive penny.toml Configuration Builder",
+    },
+  },
 };
 
 export default function BuilderPage() {

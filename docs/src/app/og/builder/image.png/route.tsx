@@ -1,20 +1,8 @@
-import { notFound } from "next/navigation";
 import { ImageResponse } from "next/og";
-import { getPageImage, source } from "@/lib/source";
 
 export const dynamic = "force-static";
 
-export async function GET(
-  _req: Request,
-  { params }: RouteContext<"/og/docs/[...slug]">,
-) {
-  const { slug } = await params;
-  const page = source.getPage(slug.slice(0, -1));
-  if (!page) notFound();
-
-  const title = page.data.title;
-  const description = page.data.description ?? "";
-
+export function GET() {
   return new ImageResponse(
     <div
       style={{
@@ -39,18 +27,19 @@ export async function GET(
         }}
       />
 
-      {/* Orange glow - top left */}
+      {/* Orange glow */}
       <div
         style={{
           position: "absolute",
-          top: "-120px",
-          left: "-80px",
+          top: "50%",
+          right: "-50px",
           width: "400px",
           height: "400px",
           borderRadius: "50%",
           background:
             "radial-gradient(circle, rgba(249,115,22,0.1) 0%, transparent 70%)",
           display: "flex",
+          transform: "translateY(-50%)",
         }}
       />
 
@@ -79,19 +68,19 @@ export async function GET(
           position: "relative",
         }}
       >
-        {/* Logo + site name + docs badge */}
+        {/* Logo + site name */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: "12px",
-            marginBottom: "40px",
+            marginBottom: "48px",
           }}
         >
           <div
             style={{
-              width: "32px",
-              height: "32px",
+              width: "36px",
+              height: "36px",
               position: "relative",
               display: "flex",
               alignItems: "center",
@@ -99,8 +88,8 @@ export async function GET(
             }}
           >
             <svg
-              width="32"
-              height="32"
+              width="36"
+              height="36"
               viewBox="0 0 100 100"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -126,7 +115,7 @@ export async function GET(
             </svg>
             <span
               style={{
-                fontSize: "13px",
+                fontSize: "15px",
                 fontWeight: 700,
                 color: "#f97316",
                 position: "relative",
@@ -144,96 +133,104 @@ export async function GET(
           >
             Penny
           </div>
-          <div
-            style={{
-              width: "1px",
-              height: "20px",
-              backgroundColor: "#2a2a2a",
-              display: "flex",
-            }}
-          />
-          <div
-            style={{
-              fontSize: "16px",
-              color: "#f97316",
-              display: "flex",
-              padding: "4px 12px",
-              border: "1px solid rgba(249,115,22,0.2)",
-              backgroundColor: "rgba(249,115,22,0.05)",
-            }}
-          >
-            Documentation
-          </div>
         </div>
 
         {/* Title */}
         <div
           style={{
-            fontSize: title.length > 30 ? "52px" : "64px",
-            fontWeight: 800,
-            color: "#fafafa",
-            letterSpacing: "-0.04em",
-            lineHeight: 1.1,
-            marginBottom: description ? "20px" : "0px",
             display: "flex",
-            maxWidth: "900px",
+            alignItems: "baseline",
+            marginBottom: "16px",
           }}
         >
-          {title}
-        </div>
-
-        {/* Description */}
-        {description ? (
-          <div
+          <span
             style={{
-              fontSize: "24px",
-              color: "#737373",
-              lineHeight: 1.4,
-              display: "flex",
-              maxWidth: "800px",
+              fontSize: "72px",
+              fontWeight: 800,
+              color: "#fafafa",
+              letterSpacing: "-0.04em",
+              lineHeight: 1,
             }}
           >
-            {description.length > 120
-              ? `${description.slice(0, 117)}...`
-              : description}
-          </div>
-        ) : null}
+            penny
+          </span>
+          <span
+            style={{
+              fontSize: "72px",
+              fontWeight: 800,
+              color: "#f97316",
+              letterSpacing: "-0.04em",
+              lineHeight: 1,
+            }}
+          >
+            .
+          </span>
+          <span
+            style={{
+              fontSize: "72px",
+              fontWeight: 800,
+              color: "#fafafa",
+              letterSpacing: "-0.04em",
+              lineHeight: 1,
+            }}
+          >
+            toml
+          </span>
+        </div>
 
-        {/* Bottom bar with breadcrumb path */}
+        {/* Subtitle */}
+        <div
+          style={{
+            fontSize: "28px",
+            color: "#737373",
+            display: "flex",
+            marginBottom: "40px",
+          }}
+        >
+          Interactive Configuration Builder
+        </div>
+
+        {/* Faux TOML snippet */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+            padding: "24px",
+            border: "1px solid #1a1a1a",
+            backgroundColor: "#0f0f0f",
+            maxWidth: "500px",
+          }}
+        >
+          <div style={{ display: "flex", gap: "0px", fontSize: "16px" }}>
+            <span style={{ color: "#525252" }}>[</span>
+            <span style={{ color: "#f97316" }}>"myapp.example.com"</span>
+            <span style={{ color: "#525252" }}>]</span>
+          </div>
+          <div style={{ display: "flex", gap: "0px", fontSize: "16px" }}>
+            <span style={{ color: "#999" }}>address</span>
+            <span style={{ color: "#525252" }}> = </span>
+            <span style={{ color: "#22c55e" }}>"127.0.0.1:3001"</span>
+          </div>
+          <div style={{ display: "flex", gap: "0px", fontSize: "16px" }}>
+            <span style={{ color: "#999" }}>command</span>
+            <span style={{ color: "#525252" }}> = </span>
+            <span style={{ color: "#22c55e" }}>"node server.js"</span>
+          </div>
+        </div>
+
+        {/* Domain label */}
         <div
           style={{
             position: "absolute",
             bottom: "60px",
-            left: "80px",
             right: "80px",
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
+            fontSize: "16px",
+            color: "#525252",
           }}
         >
-          <div
-            style={{
-              fontSize: "16px",
-              color: "#525252",
-              fontFamily: "monospace",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-            }}
-          >
-            <span>docs</span>
-            <span style={{ color: "#f97316" }}>/</span>
-            <span>{page.slugs.join(" / ")}</span>
-          </div>
-          <div
-            style={{
-              fontSize: "16px",
-              color: "#525252",
-              display: "flex",
-            }}
-          >
-            pennyproxy.com
-          </div>
+          pennyproxy.com
         </div>
       </div>
     </div>,
@@ -242,11 +239,4 @@ export async function GET(
       height: 630,
     },
   );
-}
-
-export function generateStaticParams() {
-  return source.getPages().map((page) => ({
-    lang: page.locale,
-    slug: getPageImage(page).segments,
-  }));
 }

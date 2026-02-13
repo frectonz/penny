@@ -1,20 +1,8 @@
-import { notFound } from "next/navigation";
 import { ImageResponse } from "next/og";
-import { getPageImage, source } from "@/lib/source";
 
 export const dynamic = "force-static";
 
-export async function GET(
-  _req: Request,
-  { params }: RouteContext<"/og/docs/[...slug]">,
-) {
-  const { slug } = await params;
-  const page = source.getPage(slug.slice(0, -1));
-  if (!page) notFound();
-
-  const title = page.data.title;
-  const description = page.data.description ?? "";
-
+export function GET() {
   return new ImageResponse(
     <div
       style={{
@@ -39,17 +27,32 @@ export async function GET(
         }}
       />
 
-      {/* Orange glow - top left */}
+      {/* Orange glow - top right */}
       <div
         style={{
           position: "absolute",
-          top: "-120px",
-          left: "-80px",
+          top: "-100px",
+          right: "-100px",
+          width: "500px",
+          height: "500px",
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(249,115,22,0.12) 0%, transparent 70%)",
+          display: "flex",
+        }}
+      />
+
+      {/* Orange glow - bottom left */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "-150px",
+          left: "-100px",
           width: "400px",
           height: "400px",
           borderRadius: "50%",
           background:
-            "radial-gradient(circle, rgba(249,115,22,0.1) 0%, transparent 70%)",
+            "radial-gradient(circle, rgba(249,115,22,0.06) 0%, transparent 70%)",
           display: "flex",
         }}
       />
@@ -74,24 +77,25 @@ export async function GET(
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          padding: "80px",
+          alignItems: "flex-start",
+          padding: "80px 80px",
           height: "100%",
           position: "relative",
         }}
       >
-        {/* Logo + site name + docs badge */}
+        {/* Logo + Title */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "12px",
-            marginBottom: "40px",
+            gap: "24px",
+            marginBottom: "16px",
           }}
         >
           <div
             style={{
-              width: "32px",
-              height: "32px",
+              width: "80px",
+              height: "80px",
               position: "relative",
               display: "flex",
               alignItems: "center",
@@ -99,8 +103,8 @@ export async function GET(
             }}
           >
             <svg
-              width="32"
-              height="32"
+              width="80"
+              height="80"
               viewBox="0 0 100 100"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -126,7 +130,7 @@ export async function GET(
             </svg>
             <span
               style={{
-                fontSize: "13px",
+                fontSize: "32px",
                 fontWeight: 700,
                 color: "#f97316",
                 position: "relative",
@@ -137,78 +141,54 @@ export async function GET(
           </div>
           <div
             style={{
-              fontSize: "20px",
-              color: "#737373",
+              fontSize: "96px",
+              fontWeight: 800,
+              color: "#fafafa",
+              letterSpacing: "-0.05em",
+              lineHeight: 1,
               display: "flex",
             }}
           >
             Penny
           </div>
-          <div
-            style={{
-              width: "1px",
-              height: "20px",
-              backgroundColor: "#2a2a2a",
-              display: "flex",
-            }}
-          />
-          <div
-            style={{
-              fontSize: "16px",
-              color: "#f97316",
-              display: "flex",
-              padding: "4px 12px",
-              border: "1px solid rgba(249,115,22,0.2)",
-              backgroundColor: "rgba(249,115,22,0.05)",
-            }}
-          >
-            Documentation
-          </div>
         </div>
 
-        {/* Title */}
+        {/* Tagline */}
         <div
           style={{
-            fontSize: title.length > 30 ? "52px" : "64px",
-            fontWeight: 800,
-            color: "#fafafa",
-            letterSpacing: "-0.04em",
-            lineHeight: 1.1,
-            marginBottom: description ? "20px" : "0px",
+            fontSize: "36px",
+            color: "#f97316",
+            fontWeight: 600,
+            marginBottom: "24px",
             display: "flex",
-            maxWidth: "900px",
           }}
         >
-          {title}
+          Serverless for your servers.
         </div>
 
         {/* Description */}
-        {description ? (
-          <div
-            style={{
-              fontSize: "24px",
-              color: "#737373",
-              lineHeight: 1.4,
-              display: "flex",
-              maxWidth: "800px",
-            }}
-          >
-            {description.length > 120
-              ? `${description.slice(0, 117)}...`
-              : description}
-          </div>
-        ) : null}
+        <div
+          style={{
+            fontSize: "22px",
+            color: "#737373",
+            maxWidth: "700px",
+            lineHeight: 1.5,
+            display: "flex",
+          }}
+        >
+          A reverse proxy that starts your apps on demand and kills them when
+          idle. Ten side projects, one VPS, zero waste.
+        </div>
 
-        {/* Bottom bar with breadcrumb path */}
+        {/* Bottom terminal hint */}
         <div
           style={{
             position: "absolute",
             bottom: "60px",
             left: "80px",
-            right: "80px",
             display: "flex",
-            justifyContent: "space-between",
             alignItems: "center",
+            gap: "8px",
           }}
         >
           <div
@@ -218,13 +198,25 @@ export async function GET(
               fontFamily: "monospace",
               display: "flex",
               alignItems: "center",
-              gap: "6px",
+              gap: "8px",
             }}
           >
-            <span>docs</span>
-            <span style={{ color: "#f97316" }}>/</span>
-            <span>{page.slugs.join(" / ")}</span>
+            <span style={{ color: "#f97316" }}>$</span>
+            <span>penny serve penny.toml</span>
           </div>
+        </div>
+
+        {/* Domain label */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: "60px",
+            right: "80px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
           <div
             style={{
               fontSize: "16px",
@@ -242,11 +234,4 @@ export async function GET(
       height: 630,
     },
   );
-}
-
-export function generateStaticParams() {
-  return source.getPages().map((page) => ({
-    lang: page.locale,
-    slug: getPageImage(page).segments,
-  }));
 }

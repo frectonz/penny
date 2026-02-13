@@ -44,12 +44,30 @@ export async function generateMetadata(
   const page = source.getPage(params.slug);
   if (!page) notFound();
 
+  const imageUrl = getPageImage(page).url;
+
   return {
     title: page.data.title,
     description: page.data.description,
     openGraph: {
       siteName: "Penny",
-      images: getPageImage(page).url,
+      images: {
+        url: imageUrl,
+        width: 1200,
+        height: 630,
+        alt: page.data.title,
+      },
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: page.data.title,
+      description: page.data.description,
+      images: {
+        url: imageUrl,
+        width: 1200,
+        height: 630,
+        alt: page.data.title,
+      },
     },
   };
 }
