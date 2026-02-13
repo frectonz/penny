@@ -4,7 +4,7 @@
   "description": "Serverless for your servers",
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#0a0a0a",
+  "theme_color": "#fafafa",
   "background_color": "#0a0a0a",
   "icons": [
     {

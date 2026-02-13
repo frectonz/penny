@@ -65,6 +65,7 @@ export default function Layout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
+        <meta name="theme-color" content="#fafafa" />
         <meta
           name="theme-color"
           content="#fafafa"
