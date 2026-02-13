@@ -6,6 +6,16 @@
   border-radius: 0 !important;
 }
 
+html {
+  background-color: #fafafa;
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not(.light):not([data-theme="light"]) {
+    background-color: #0a0a0a;
+  }
+}
+
 :root {
   --color-penny-orange: #f97316;
   --color-penny-green: #22c55e;
@@ -49,6 +59,8 @@
 
 .dark,
 [data-theme="dark"] {
+  background-color: #0a0a0a;
+
   --color-fd-background: #0a0a0a;
   --color-fd-muted: #0f0f0f;
   --color-fd-card: #0f0f0f;

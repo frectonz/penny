@@ -64,6 +64,18 @@ export default function Layout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        <meta
+          name="theme-color"
+          content="#fafafa"
+          media="(prefers-color-scheme: light)"
+        />
+        <meta
+          name="theme-color"
+          content="#0a0a0a"
+          media="(prefers-color-scheme: dark)"
+        />
+      </head>
       <body className="flex flex-col min-h-screen font-[family-name:var(--font-inter)]">
         <Provider>{children}</Provider>
       </body>
