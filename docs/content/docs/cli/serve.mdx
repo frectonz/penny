@@ -1,0 +1,46 @@
+---
+title: penny serve
+description: Start the reverse proxy
+---
+
+Start the Penny reverse proxy.
+
+## Usage
+
+```
+penny serve <config> [OPTIONS]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<config>` | Path to the penny.toml configuration file |
+
+## Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--address <ADDR>` | `0.0.0.0:80` | HTTP listen address |
+| `--https-address <ADDR>` | `0.0.0.0:443` | HTTPS listen address |
+| `--no-tls` | — | Disable TLS even if configured in the config file |
+| `--password <PASSWORD>` | — | Password for dashboard access (also via `PENNY_PASSWORD` env var) |
+
+## Examples
+
+```bash
+# Basic usage
+penny serve penny.toml
+
+# Custom HTTP port
+penny serve penny.toml --address 0.0.0.0:8080
+
+# With dashboard password
+penny serve penny.toml --password mysecret
+
+# Using environment variable for password
+PENNY_PASSWORD=mysecret penny serve penny.toml
+
+# Disable TLS
+penny serve penny.toml --no-tls
+```

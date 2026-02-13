@@ -1,0 +1,60 @@
+---
+title: Per-App Options
+description: All configuration options available for each app
+---
+
+Each app is defined as a TOML table with the hostname as the key:
+
+```toml
+["myapp.example.com"]
+address = "127.0.0.1:3001"
+command = "node server.js"
+health_check = "/"
+```
+
+## Options Reference
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `address` | *required* | Address the backend listens on (e.g. `127.0.0.1:3001`) |
+| `command` | *required* | Shell command to start the app (see below) |
+| `health_check` | *required* | HTTP path to check if the app is ready (e.g. `/` or `/health`) |
+| `wait_period` | `10m` | How long to wait after the last request before killing the process |
+| `adaptive_wait` | `false` | Enable adaptive idle timeout based on traffic patterns |
+| `min_wait_period` | `5m` | Minimum idle timeout when `adaptive_wait` is enabled |
+| `max_wait_period` | `30m` | Maximum idle timeout when `adaptive_wait` is enabled |
+| `low_req_per_hour` | `12` | Request rate below which idle timeout stays at `min_wait_period` |
+| `high_req_per_hour` | `300` | Request rate above which idle timeout stays at `max_wait_period` |
+| `start_timeout` | `30s` | Max time to wait for the app to become healthy |
+| `stop_timeout` | `30s` | Max time to wait for the app to stop |
+| `cold_start_page` | `false` | Show a loading page to browser users during cold starts |
+| `cold_start_page_path` | — | Path to a custom HTML file for the cold start page |
+| `also_warm` | `[]` | List of other app hostnames to pre-warm when this app receives traffic |
+| `health_check_initial_backoff_ms` | `10` | Initial retry delay for health checks (milliseconds) |
+| `health_check_max_backoff_secs` | `2` | Maximum retry delay for health checks (seconds) |
+
+## Start and Stop Commands
+
+By default, `command` is a single string. Penny starts the process when a request arrives and kills it (SIGKILL) when the idle timeout expires:
+
+```toml
+["myapp.example.com"]
+command = "node server.js"
+```
+
+If your app needs a graceful shutdown — for example a Docker container or a database — you can provide separate start and stop commands:
+
+```toml
+["myapp.example.com".command]
+start = "docker start myapp"
+end = "docker stop myapp"
+```
+
+When using the table form, Penny runs the `end` command on shutdown instead of killing the process.
+
+## Duration Format
+
+Duration fields like `wait_period`, `start_timeout`, and `stop_timeout` accept values like:
+- `30s` — 30 seconds
+- `10m` — 10 minutes
+- `1h` — 1 hour

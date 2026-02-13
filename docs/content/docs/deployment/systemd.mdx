@@ -1,0 +1,71 @@
+---
+title: Systemd Deployment
+description: Run Penny as a systemd service on Linux
+---
+
+Penny can install itself as a systemd user service on Linux, automatically starting at boot.
+
+## Quick Setup
+
+```bash
+# Install and start the service
+penny systemd install penny.toml
+
+# With options
+penny systemd install penny.toml --password mysecret --address 0.0.0.0:80
+```
+
+This:
+1. Creates `~/.config/systemd/user/penny.service`
+2. Enables and starts the service
+3. Runs `loginctl enable-linger` so it starts at boot without a login session
+
+## Service Management
+
+```bash
+# Check status
+penny systemd status
+
+# View logs
+penny systemd logs
+penny systemd logs --follow
+
+# Restart (after editing penny.toml)
+penny systemd restart
+
+# Remove the service
+penny systemd uninstall
+```
+
+## Shell Environment
+
+The generated unit file wraps `penny serve` in your login shell, so your full PATH is available. This means tools installed via nvm, cargo, pyenv, etc. will work in your app commands.
+
+## Full Example
+
+```bash
+# 1. Create your config
+cat > penny.toml << 'EOF'
+api_address = "0.0.0.0:3031"
+
+[tls]
+enabled = true
+acme_email = "you@example.com"
+
+["myapp.example.com"]
+address = "127.0.0.1:3001"
+command = "node server.js"
+health_check = "/"
+wait_period = "10m"
+EOF
+
+# 2. Validate
+penny check penny.toml
+
+# 3. Install as a service
+penny systemd install penny.toml --password mysecret
+
+# 4. Verify
+penny systemd status
+penny systemd logs
+```

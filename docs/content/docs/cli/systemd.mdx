@@ -1,0 +1,76 @@
+---
+title: penny systemd
+description: Manage Penny as a systemd user service
+---
+
+Manage Penny as a systemd user service (Linux only). Generates a unit file that wraps `penny serve` in your login shell so your full PATH (nvm, cargo, etc.) is available.
+
+## Subcommands
+
+### install
+
+```
+penny systemd install <config> [OPTIONS]
+```
+
+Creates `~/.config/systemd/user/penny.service`, enables and starts it, and runs `loginctl enable-linger` so the service starts at boot without a login session.
+
+**Options** (same as `penny serve`):
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--address <ADDR>` | `0.0.0.0:80` | HTTP listen address |
+| `--https-address <ADDR>` | `0.0.0.0:443` | HTTPS listen address |
+| `--no-tls` | — | Disable TLS even if configured |
+| `--password <PASSWORD>` | — | Dashboard password |
+
+### uninstall
+
+```
+penny systemd uninstall
+```
+
+Stops and removes the Penny systemd service.
+
+### status
+
+```
+penny systemd status
+```
+
+Shows the current status of the Penny service (passthrough to `systemctl`).
+
+### restart
+
+```
+penny systemd restart
+```
+
+Restarts the Penny service. Useful after editing `penny.toml`.
+
+### logs
+
+```
+penny systemd logs [--follow]
+```
+
+Shows Penny service logs (passthrough to `journalctl`). Use `--follow` to tail logs in real time.
+
+## Example Workflow
+
+```bash
+# Install and start as a service
+penny systemd install penny.toml --password mysecret
+
+# Check status
+penny systemd status
+
+# After editing penny.toml
+penny systemd restart
+
+# View logs
+penny systemd logs --follow
+
+# Remove the service
+penny systemd uninstall
+```

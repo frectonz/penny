@@ -1,0 +1,44 @@
+---
+title: penny check
+description: Validate your configuration
+---
+
+Validate your configuration by starting each app, running its health check, and stopping it.
+
+## Usage
+
+```
+penny check <config> [OPTIONS]
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `<config>` | Path to the penny.toml configuration file |
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--apps <HOSTS>` | Comma-separated list of specific apps to check |
+
+## Examples
+
+```bash
+# Check all apps
+penny check penny.toml
+
+# Check specific apps
+penny check penny.toml --apps app1.example.com,app2.example.com
+```
+
+## What It Does
+
+For each app (or the ones specified with `--apps`):
+
+1. Runs the start command
+2. Waits for the health check to pass
+3. Stops the app
+
+This verifies that your commands work and health checks pass before deploying.

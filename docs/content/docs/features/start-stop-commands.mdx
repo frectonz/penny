@@ -1,0 +1,44 @@
+---
+title: Start and Stop Commands
+description: Separate commands for graceful app lifecycle management
+---
+
+By default, Penny uses a single `command` to start your app and kills the process (SIGKILL) when the idle timeout expires.
+
+## Simple Command
+
+```toml
+["myapp.example.com"]
+command = "node server.js"
+```
+
+Penny starts the process and kills it when idle.
+
+## Separate Start and Stop
+
+If your app needs a graceful shutdown — for example a Docker container or a database — provide separate start and stop commands using the table form:
+
+```toml
+["myapp.example.com".command]
+start = "docker start myapp"
+end = "docker stop myapp"
+```
+
+When using the table form, Penny runs the `end` command on shutdown instead of killing the process.
+
+## When to Use Separate Commands
+
+- **Docker containers**: Use `docker start`/`docker stop` for proper container lifecycle
+- **Databases**: Ensure clean shutdown with proper flush/checkpoint
+- **Process managers**: When the start command doesn't directly run the process (e.g., `systemctl start`)
+- **Cleanup required**: When you need to run cleanup scripts on shutdown
+
+## Timeouts
+
+Both command forms respect the timeout settings:
+
+```toml
+["myapp.example.com"]
+start_timeout = "30s"   # max time to wait for health check
+stop_timeout = "30s"    # max time to wait for stop command
+```

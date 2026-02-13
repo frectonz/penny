@@ -1,0 +1,44 @@
+---
+title: Configuration
+description: Overview of Penny's configuration file
+---
+
+Penny is configured using a TOML file, typically named `penny.toml`. The file contains global settings, optional TLS configuration, and one or more app definitions.
+
+## Full Example
+
+```toml
+api_address = "0.0.0.0:3031"
+api_domain = "penny.example.com"
+database_url = "sqlite://penny.db"
+
+[tls]
+enabled = true
+acme_email = "you@example.com"
+# staging = true
+# certs_dir = "./certs"
+# renewal_days = 30
+# renewal_check_interval_hours = 12
+
+["app1.example.com"]
+address = "127.0.0.1:3001"
+command = "node server.js"
+health_check = "/"
+wait_period = "10m"
+also_warm = ["app2.example.com"]
+
+["app2.example.com"]
+address = "127.0.0.1:3002"
+command = "python app.py"
+health_check = "/health"
+adaptive_wait = true
+```
+
+## Sections
+
+<Cards>
+  <Card title="Global Options" description="API address, database URL, and more" href="/docs/configuration/global-options" />
+  <Card title="Per-App Options" description="All settings for each app" href="/docs/configuration/per-app-options" />
+  <Card title="TLS" description="Automatic HTTPS configuration" href="/docs/configuration/tls" />
+  <Card title="Adaptive Wait" description="Dynamic idle timeout based on traffic" href="/docs/configuration/adaptive-wait" />
+</Cards>

@@ -1,0 +1,59 @@
+---
+title: Dashboard
+description: Built-in web dashboard with metrics and logs
+---
+
+Penny includes a built-in web dashboard that shows metrics, run history, and logs for all your apps.
+
+## Enabling the Dashboard
+
+Set `api_address` in your config to enable the dashboard on a separate port:
+
+```toml
+api_address = "0.0.0.0:3031"
+```
+
+Or route it through the proxy with automatic TLS:
+
+```toml
+api_domain = "penny.example.com"
+```
+
+You can use both simultaneously.
+
+## Authentication
+
+Protect the dashboard with a password:
+
+```bash
+penny serve penny.toml --password mysecret
+```
+
+Or use an environment variable:
+
+```bash
+PENNY_PASSWORD=mysecret penny serve penny.toml
+```
+
+## Dashboard Features
+
+- **Total overview**: Aggregate run counts, uptime, and failure rates across all apps
+- **Per-app metrics**: Individual stats for each configured app
+- **Run history**: Start/stop times, durations, and outcomes with pagination
+- **Logs**: Captured stdout/stderr for each run
+- **Time-range filtering**: Filter all metrics by time range
+
+## API Endpoints
+
+The dashboard is backed by a REST API:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/version` | Penny version info |
+| `GET /api/overview` | Total overview metrics |
+| `GET /api/apps/:hostname` | Per-app overview |
+| `GET /api/apps/:hostname/runs` | Run history with pagination |
+| `GET /api/runs/:id/logs` | Logs for a specific run |
+| `GET /api/auth/status` | Authentication status |
+
+All endpoints except auth status require authentication when a password is set.

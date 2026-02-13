@@ -1,0 +1,40 @@
+---
+title: Building from Source
+description: Build Penny from source code
+---
+
+## Prerequisites
+
+- **Rust** (2024 edition) — [Install Rust](https://rustup.rs/)
+- **pnpm** — [Install pnpm](https://pnpm.io/installation) (for the dashboard UI)
+
+## Build Steps
+
+```bash
+# Clone the repository
+git clone https://github.com/frectonz/penny.git
+cd penny
+
+# Build the dashboard UI
+cd ui && pnpm install && pnpm build && cd ..
+
+# Build penny
+cargo build --release
+```
+
+The binary will be at `target/release/penny`.
+
+## Development
+
+For development with hot reload:
+
+```bash
+# Run in debug mode
+cargo run -- serve penny.toml
+```
+
+## Project Structure
+
+- `src/` — Rust source code (proxy, config, API, CLI)
+- `ui/` — Dashboard web UI (built with pnpm)
+- `docs/` — Documentation site (Fumadocs + Next.js)

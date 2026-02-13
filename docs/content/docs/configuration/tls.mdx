@@ -1,0 +1,47 @@
+---
+title: TLS Configuration
+description: Automatic HTTPS via Let's Encrypt
+---
+
+Penny can automatically provision and renew TLS certificates using Let's Encrypt.
+
+## Configuration
+
+Add a `[tls]` section to your `penny.toml`:
+
+```toml
+[tls]
+enabled = true
+acme_email = "you@example.com"
+```
+
+## Options
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `false` | Enable automatic TLS |
+| `acme_email` | *required* | Contact email for Let's Encrypt |
+| `staging` | `false` | Use Let's Encrypt staging environment for testing |
+| `certs_dir` | `./certs` | Directory to store certificates |
+| `renewal_days` | `30` | Renew certificates this many days before expiry |
+| `renewal_check_interval_hours` | `12` | How often to check for renewals |
+
+## Full Example
+
+```toml
+[tls]
+enabled = true
+acme_email = "you@example.com"
+staging = true                      # use staging for testing
+certs_dir = "./certs"               # where certs are stored
+renewal_days = 30                   # renew 30 days before expiry
+renewal_check_interval_hours = 12   # check every 12 hours
+```
+
+## Notes
+
+- When TLS is enabled, Penny listens on both HTTP (port 80) and HTTPS (port 443) by default.
+- HTTP requests are used for ACME challenge validation.
+- Use `staging = true` when testing to avoid Let's Encrypt rate limits.
+- The `--no-tls` CLI flag disables TLS even if configured in the config file.
+- Certificates are stored in `certs_dir` and persist across restarts.

@@ -1,0 +1,31 @@
+---
+title: Introduction
+description: What Penny is and what problem it solves
+---
+
+import { HowItWorksAnimation } from '@/components/how-it-works-animation';
+
+# Penny
+
+**Serverless for your servers.**
+
+You have a $5 VPS with 10 side projects on it. They all run 24/7 eating memory even though nobody's visiting them. That's wasteful.
+
+Penny is a reverse proxy that only starts your servers when they get a request, and kills them after they've been idle. You go from 10 servers running all the time to one reverse proxy that provisions them when they're needed.
+
+## How It Works
+
+Instead of telling Penny which address to proxy to, you give it the command to start your server. It runs that command on the first request, waits for a health check, proxies the traffic, and then kills the process after a configurable idle period. Next request comes in, it starts all over again.
+
+Each request resets the idle timer. As long as traffic keeps coming, the app stays alive. Once traffic stops, Penny waits for `wait_period` and then shuts the process down.
+
+<HowItWorksAnimation />
+
+## Next Steps
+
+<Cards>
+  <Card title="Installation" description="Install Penny on your system" href="/docs/installation" />
+  <Card title="Quick Start" description="Get up and running in minutes" href="/docs/quick-start" />
+  <Card title="Configuration" description="Full configuration reference" href="/docs/configuration" />
+  <Card title="CLI Reference" description="All CLI commands and options" href="/docs/cli" />
+</Cards>

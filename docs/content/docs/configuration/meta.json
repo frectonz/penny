@@ -1,0 +1,9 @@
+{
+  "pages": [
+    "index",
+    "global-options",
+    "per-app-options",
+    "tls",
+    "adaptive-wait"
+  ]
+}

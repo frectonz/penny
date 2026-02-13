@@ -1,0 +1,48 @@
+---
+title: Quick Start
+description: Get Penny up and running in minutes
+---
+
+## 1. Create a Configuration File
+
+Create a `penny.toml` file:
+
+```toml
+["myapp.example.com"]
+address = "127.0.0.1:3001"
+wait_period = "10m"
+health_check = "/"
+command = "node server.js"
+```
+
+This tells Penny:
+- Route requests for `myapp.example.com` to `127.0.0.1:3001`
+- Start the app with `node server.js`
+- Check `GET /` to know when the app is ready
+- Kill the app after 10 minutes of inactivity
+
+## 2. Start Penny
+
+```bash
+penny serve penny.toml
+```
+
+That's it. Requests to `myapp.example.com` will start `node server.js`, proxy traffic to `127.0.0.1:3001`, and kill the process after 10 minutes of inactivity.
+
+## 3. Validate Your Config
+
+Before deploying, you can validate your configuration:
+
+```bash
+penny check penny.toml
+```
+
+This starts each app, runs its health check, and stops it to make sure everything works.
+
+## Next Steps
+
+<Cards>
+  <Card title="Configuration Reference" description="All configuration options explained" href="/docs/configuration" />
+  <Card title="TLS Setup" description="Enable automatic HTTPS" href="/docs/configuration/tls" />
+  <Card title="Systemd Deployment" description="Run Penny as a service" href="/docs/deployment/systemd" />
+</Cards>

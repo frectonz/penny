@@ -1,0 +1,74 @@
+---
+title: Adaptive Wait
+description: Dynamic idle timeout based on traffic patterns
+---
+
+When `adaptive_wait = true`, Penny adjusts the idle timeout based on recent traffic instead of using a fixed `wait_period`. Busier apps stay alive longer; idle apps shut down faster.
+
+## How It Works
+
+Penny computes request rates over two time windows:
+- **Short window (5 min)** — reacts quickly to traffic bursts
+- **Long window (30 min)** — captures sustained traffic patterns
+
+The higher of the two rates is mapped to a wait period between `min_wait_period` and `max_wait_period` using a smooth S-curve (smoothstep). The `low_req_per_hour` and `high_req_per_hour` thresholds control where the curve starts and saturates.
+
+## Configuration
+
+### Minimal Setup
+
+Just enable it — defaults handle the rest:
+
+```toml
+["myapp.example.com"]
+address = "127.0.0.1:3001"
+command = "node server.js"
+health_check = "/"
+adaptive_wait = true
+```
+
+### Custom Thresholds
+
+For a high-traffic API with custom thresholds:
+
+```toml
+["api.example.com"]
+address = "127.0.0.1:3002"
+command = "python app.py"
+health_check = "/health"
+adaptive_wait = true
+min_wait_period = "5m"
+max_wait_period = "60m"
+low_req_per_hour = 60
+high_req_per_hour = 3000
+```
+
+## Options
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `adaptive_wait` | `false` | Enable adaptive idle timeout |
+| `min_wait_period` | `5m` | Minimum idle timeout |
+| `max_wait_period` | `30m` | Maximum idle timeout |
+| `low_req_per_hour` | `12` | Request rate at which timeout stays at minimum |
+| `high_req_per_hour` | `300` | Request rate at which timeout reaches maximum |
+
+## The Smoothstep Curve
+
+The mapping uses a [smoothstep function](https://en.wikipedia.org/wiki/Smoothstep) for smooth transitions between thresholds:
+
+```
+t = clamp((rate - low) / (high - low), 0, 1)
+smoothstep = 3t² - 2t³
+wait = min_wait + smoothstep × (max_wait - min_wait)
+```
+
+This means:
+- Below `low_req_per_hour`: timeout stays at `min_wait_period`
+- Above `high_req_per_hour`: timeout stays at `max_wait_period`
+- Between the two: smooth transition with no sharp jumps
+
+## Notes
+
+- When `adaptive_wait` is enabled, the `wait_period` field is ignored.
+- The adaptive wait is recalculated each time Penny schedules a kill timer.

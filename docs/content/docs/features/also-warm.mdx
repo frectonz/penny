@@ -1,0 +1,33 @@
+---
+title: Related Warm-up
+description: Pre-warm related apps when traffic arrives
+---
+
+Apps can declare relationships so that traffic to one pre-warms another in the background.
+
+## Configuration
+
+```toml
+["api.example.com"]
+address = "127.0.0.1:3001"
+command = "node api.js"
+health_check = "/health"
+also_warm = ["frontend.example.com"]
+
+["frontend.example.com"]
+address = "127.0.0.1:3002"
+command = "node frontend.js"
+health_check = "/"
+```
+
+## How It Works
+
+When a request hits `api.example.com`, Penny starts `frontend.example.com` in the background, anticipating it will be needed soon.
+
+The warmed app gets its own idle timer — if no direct traffic arrives, it shuts down after its `wait_period` as usual.
+
+## Use Cases
+
+- **API + Frontend**: When users hit the API, they'll likely need the frontend too
+- **Microservices**: Warm up downstream services when an upstream receives traffic
+- **Multi-app sites**: Start related apps together to reduce overall cold start time

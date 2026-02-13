@@ -1,0 +1,16 @@
+{
+  "root": true,
+  "pages": [
+    "---Introduction---",
+    "index",
+    "installation",
+    "quick-start",
+    "---Reference---",
+    "configuration",
+    "cli",
+    "---Guides---",
+    "features",
+    "deployment",
+    "building-from-source"
+  ]
+}

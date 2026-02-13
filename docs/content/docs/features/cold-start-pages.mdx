@@ -1,0 +1,57 @@
+---
+title: Cold Start Pages
+description: Show a loading page during cold starts
+---
+
+By default, Penny blocks the connection during cold starts until the app is ready. With cold start pages enabled, browser users see a loading page that auto-refreshes until the app is up.
+
+## Enable Cold Start Page
+
+```toml
+["myapp.example.com"]
+address = "127.0.0.1:3001"
+health_check = "/"
+command = "node server.js"
+cold_start_page = true
+```
+
+## Custom HTML Page
+
+You can provide your own branded loading page:
+
+```toml
+["myapp.example.com"]
+address = "127.0.0.1:3001"
+health_check = "/health"
+command = "node server.js"
+cold_start_page_path = "./loading.html"
+```
+
+Setting `cold_start_page_path` implicitly enables `cold_start_page` — you don't need to set both. The HTML file is read once at startup.
+
+## Custom Page Requirements
+
+Your custom page **must** include a meta refresh tag so the browser automatically retries:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="refresh" content="2">
+    <title>Loading...</title>
+</head>
+<body>
+    <p>Starting up, please wait...</p>
+</body>
+</html>
+```
+
+A warning is logged at startup if the meta refresh tag is missing.
+
+## How It Works
+
+1. A request arrives for a cold app
+2. Penny starts the app in the background
+3. Instead of blocking, Penny immediately returns the cold start page
+4. The page's meta refresh tag causes the browser to retry after a few seconds
+5. Once the app is healthy, the next retry gets proxied to the actual app
