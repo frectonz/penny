@@ -3,8 +3,7 @@
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 
-const command =
-  "curl -LsSf https://github.com/frectonz/penny/releases/download/0.0.17/penny-installer.sh | sh";
+const command = "curl -LsSf https://pennyproxy.com/install.sh | sh";
 
 export function CopyInstallCommand() {
   const [copied, setCopied] = useState(false);
