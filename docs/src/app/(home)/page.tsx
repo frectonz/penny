@@ -228,6 +228,33 @@ export default function HomePage() {
         />
       </section>
 
+      {/* ─── Video ─── */}
+      <section className="py-20 sm:py-28">
+        <div className="mx-auto max-w-4xl px-6">
+          <div className="overflow-hidden border border-[var(--landing-border)] shadow-2xl shadow-black/10 dark:shadow-black/30">
+            <div className="aspect-video">
+              <iframe
+                className="h-full w-full"
+                src="https://www.youtube.com/embed/TnC87BvWymc"
+                title="Penny demo"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-auto mt-20 max-w-5xl px-6 sm:mt-28">
+          <div
+            className="h-px"
+            style={{
+              background:
+                "linear-gradient(to right, transparent, var(--landing-border-subtle), transparent)",
+            }}
+          />
+        </div>
+      </section>
+
       {/* ─── How It Works ─── */}
       <section className="py-20 sm:py-28">
         <div className="mx-auto max-w-5xl px-6">
