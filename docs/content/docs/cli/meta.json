@@ -1,4 +1,4 @@
 {
   "title": "CLI",
-  "pages": ["index", "serve", "check", "systemd", "dokku"]
+  "pages": ["index", "serve", "check", "systemd"]
 }

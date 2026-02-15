@@ -1,7 +1,6 @@
 import {
   ArrowRight,
   BarChart3,
-  Container,
   FileText,
   Link2,
   Server,
@@ -49,11 +48,6 @@ const features = [
     icon: Server,
     title: "Systemd",
     description: "One command to install as a systemd service.",
-  },
-  {
-    icon: Container,
-    title: "Dokku",
-    description: "Works with Dokku containers out of the box.",
   },
 ];
 

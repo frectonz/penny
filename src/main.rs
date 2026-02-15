@@ -6,7 +6,6 @@ mod check;
 mod collector;
 mod config;
 mod db;
-mod dokku;
 mod proxy;
 mod reporter;
 mod systemd;
@@ -69,11 +68,6 @@ enum Command {
         #[clap(subcommand)]
         action: SystemdAction,
     },
-    /// Dokku integration commands.
-    Dokku {
-        #[clap(subcommand)]
-        action: DokkuAction,
-    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -130,17 +124,6 @@ enum SystemdAction {
         /// Restart the system-level service instead of a user service.
         #[arg(long)]
         system: bool,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum DokkuAction {
-    /// Generate penny.toml from all penny-proxied Dokku apps.
-    BuildConfig,
-    /// Remove an app from the penny config and regenerate.
-    ClearConfig {
-        /// The Dokku app name to clear.
-        app: String,
     },
 }
 
@@ -251,10 +234,6 @@ fn main() -> color_eyre::Result<()> {
             SystemdAction::Status { system } => systemd::status(system),
             SystemdAction::Logs { follow, system } => systemd::logs(follow, system),
             SystemdAction::Restart { system } => systemd::restart(system),
-        },
-        Command::Dokku { action } => match action {
-            DokkuAction::BuildConfig => dokku::build_config(),
-            DokkuAction::ClearConfig { app } => dokku::clear_config(&app),
         },
         Command::Serve {
             config,
