@@ -3,7 +3,6 @@ import {
   BarChart3,
   FileText,
   Link2,
-  Server,
   ShieldCheck,
   Timer,
   Zap,
@@ -43,11 +42,6 @@ const features = [
     icon: BarChart3,
     title: "Dashboard",
     description: "Built-in metrics, uptime tracking, and logs.",
-  },
-  {
-    icon: Server,
-    title: "Systemd",
-    description: "One command to install as a systemd service.",
   },
 ];
 
@@ -293,7 +287,7 @@ export default function HomePage() {
           <h2 className="mb-12 text-2xl font-bold tracking-tight text-[var(--landing-text)] sm:text-3xl">
             Everything you need
           </h2>
-          <div className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
             {features.map((f) => (
               <div key={f.title}>
                 <f.icon
