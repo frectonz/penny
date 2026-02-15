@@ -164,7 +164,7 @@ export default function HomePage() {
                 className="mb-10 inline-flex items-center gap-2 border border-[var(--landing-border)] bg-[var(--landing-bg-elevated)]/80 px-3 py-1 text-xs text-[var(--landing-text-muted)] backdrop-blur-sm transition-colors hover:text-[var(--landing-text)]"
               >
                 <span className="h-1.5 w-1.5 bg-[#22c55e]" />
-                v0.0.16
+                v0.0.17
                 <ArrowRight className="h-3 w-3" />
               </a>
 

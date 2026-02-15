@@ -62,7 +62,7 @@
           };
 
           pname = "penny";
-          version = "0.0.16";
+          version = "0.0.17";
         in
         rec {
           ui = pkgs.stdenvNoCC.mkDerivation {
