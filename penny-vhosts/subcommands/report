@@ -8,6 +8,7 @@ PENNY_DATA_DIR="$DOKKU_LIB_ROOT/data/penny-vhosts"
 cmd-penny-vhosts-report() {
   declare desc="report penny properties for an app"
   declare cmd="penny-vhosts:report" argv=("$@")
+  [[ "$1" == "$cmd" ]] && shift 1
   declare APP="$1"
 
   [[ -z "$APP" ]] && dokku_log_fail "Please specify an app name"
