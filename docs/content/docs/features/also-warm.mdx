@@ -24,7 +24,7 @@ health_check = "/"
 
 When a request hits `api.example.com`, Penny starts `frontend.example.com` in the background, anticipating it will be needed soon.
 
-The warmed app gets its own idle timer — if no direct traffic arrives, it shuts down after its `wait_period` as usual.
+The warmed app gets its own idle timer, if no direct traffic arrives, it shuts down after its `wait_period` as usual.
 
 ## Use Cases
 

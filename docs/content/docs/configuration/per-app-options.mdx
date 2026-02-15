@@ -28,7 +28,7 @@ health_check = "/"
 | `start_timeout` | `30s` | Max time to wait for the app to become healthy |
 | `stop_timeout` | `30s` | Max time to wait for the app to stop |
 | `cold_start_page` | `false` | Show a loading page to browser users during cold starts |
-| `cold_start_page_path` | — | Path to a custom HTML file for the cold start page |
+| `cold_start_page_path` | - | Path to a custom HTML file for the cold start page |
 | `also_warm` | `[]` | List of other app hostnames to pre-warm when this app receives traffic |
 | `health_check_initial_backoff_ms` | `10` | Initial retry delay for health checks (milliseconds) |
 | `health_check_max_backoff_secs` | `2` | Maximum retry delay for health checks (seconds) |
@@ -42,7 +42,7 @@ By default, `command` is a single string. Penny starts the process when a reques
 command = "node server.js"
 ```
 
-If your app needs a graceful shutdown — for example a Docker container or a database — you can provide separate start and stop commands:
+If your app needs a graceful shutdown, for example a Docker container or a database, you can provide separate start and stop commands:
 
 ```toml
 ["myapp.example.com".command]
@@ -55,6 +55,6 @@ When using the table form, Penny runs the `end` command on shutdown instead of k
 ## Duration Format
 
 Duration fields like `wait_period`, `start_timeout`, and `stop_timeout` accept values like:
-- `30s` — 30 seconds
-- `10m` — 10 minutes
-- `1h` — 1 hour
+- `30s` - 30 seconds
+- `10m` - 10 minutes
+- `1h` - 1 hour

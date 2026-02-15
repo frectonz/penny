@@ -8,8 +8,8 @@ When `adaptive_wait = true`, Penny adjusts the idle timeout based on recent traf
 ## How It Works
 
 Penny computes request rates over two time windows:
-- **Short window (5 min)** — reacts quickly to traffic bursts
-- **Long window (30 min)** — captures sustained traffic patterns
+- **Short window (5 min)** - reacts quickly to traffic bursts
+- **Long window (30 min)** - captures sustained traffic patterns
 
 The higher of the two rates is mapped to a wait period between `min_wait_period` and `max_wait_period` using a smooth S-curve (smoothstep). The `low_req_per_hour` and `high_req_per_hour` thresholds control where the curve starts and saturates.
 
@@ -17,7 +17,7 @@ The higher of the two rates is mapped to a wait period between `min_wait_period`
 
 ### Minimal Setup
 
-Just enable it — defaults handle the rest:
+Just enable it, defaults handle the rest:
 
 ```toml
 ["myapp.example.com"]
