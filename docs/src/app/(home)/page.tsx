@@ -93,9 +93,9 @@ function TomlLine({ line }: { line: string }) {
 function TomlBlock({ code }: { code: string }) {
   return (
     <>
-      {code.split("\n").map((line) => {
-        if (line === "") return <div key={`empty-${line}`} className="h-3" />;
-        return <TomlLine key={line} line={line} />;
+      {code.split("\n").map((line, i) => {
+        if (line === "") return <div key={i} className="h-3" />;
+        return <TomlLine key={i} line={line} />;
       })}
     </>
   );
