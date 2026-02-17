@@ -17,8 +17,20 @@ export default async function Page(props: PageProps<"/docs/[[...slug]]">) {
 
   const MDX = page.data.body;
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    headline: page.data.title,
+    description: page.data.description,
+    url: `https://pennyproxy.com${page.url}`,
+  };
+
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
@@ -49,6 +61,9 @@ export async function generateMetadata(
   return {
     title: page.data.title,
     description: page.data.description,
+    alternates: {
+      canonical: page.url,
+    },
     openGraph: {
       siteName: "Penny",
       images: {

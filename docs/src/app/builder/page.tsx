@@ -4,6 +4,9 @@ import { TomlBuilder } from "@/components/toml-builder";
 export const metadata: Metadata = {
   title: "Builder",
   description: "Interactive penny.toml configuration builder",
+  alternates: {
+    canonical: "/builder",
+  },
   openGraph: {
     siteName: "Penny",
     images: {

@@ -30,6 +30,9 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   manifest: "/site.webmanifest",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     type: "website",
     siteName: "Penny",
@@ -65,6 +68,26 @@ export default function Layout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              name: "Penny",
+              description:
+                "A reverse proxy that starts your apps on demand and kills them when idle. Perfect for cheap VPS instances with multiple side projects.",
+              url: "https://pennyproxy.com",
+              applicationCategory: "DeveloperApplication",
+              operatingSystem: "Linux",
+              offers: {
+                "@type": "Offer",
+                price: "0",
+                priceCurrency: "USD",
+              },
+            }),
+          }}
+        />
         <meta name="theme-color" content="#fafafa" />
         <meta
           name="theme-color"
