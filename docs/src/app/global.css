@@ -105,3 +105,57 @@ body {
   --terminal-text: #e5e5e5;
   --terminal-table-name: #f97316;
 }
+
+.docs-grid-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.docs-grid-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+.docs-grid-bg {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: clamp(420px, 72vh, 860px);
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(249, 115, 22, 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(249, 115, 22, 0.18) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(
+    ellipse 82% 54% at 50% 0%,
+    rgba(0, 0, 0, 0.88),
+    transparent 88%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 82% 54% at 50% 0%,
+    rgba(0, 0, 0, 0.88),
+    transparent 88%
+  );
+  animation: docs-grid-pulse 12s ease-in-out infinite alternate;
+}
+
+.dark .docs-grid-bg,
+[data-theme="dark"] .docs-grid-bg {
+  background-image:
+    linear-gradient(rgba(249, 115, 22, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(249, 115, 22, 0.12) 1px, transparent 1px);
+}
+
+@keyframes docs-grid-pulse {
+  0% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0.65;
+  }
+}
