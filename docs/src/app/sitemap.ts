@@ -10,9 +10,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     url: `${baseUrl}${page.url}`,
   }));
 
-  return [
-    { url: baseUrl },
-    { url: `${baseUrl}/builder` },
-    ...docPages,
-  ];
+  return [{ url: baseUrl }, { url: `${baseUrl}/builder` }, ...docPages];
 }
