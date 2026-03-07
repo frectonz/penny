@@ -23,6 +23,7 @@ acme_email = "you@example.com"
 ["app1.example.com"]
 address = "127.0.0.1:3001"
 command = "node server.js"
+cwd = "/opt/apps/app1"
 health_check = "/"
 wait_period = "10m"
 also_warm = ["app2.example.com"]

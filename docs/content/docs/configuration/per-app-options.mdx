@@ -18,6 +18,7 @@ health_check = "/"
 |-------|---------|-------------|
 | `address` | *required* | Address the backend listens on (e.g. `127.0.0.1:3001`) |
 | `command` | *required* | Shell command to start the app (see below) |
+| `cwd` | — | Working directory for the command |
 | `health_check` | *required* | HTTP path to check if the app is ready (e.g. `/` or `/health`) |
 | `wait_period` | `10m` | How long to wait after the last request before killing the process |
 | `adaptive_wait` | `false` | Enable adaptive idle timeout based on traffic patterns |

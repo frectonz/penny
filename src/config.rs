@@ -139,6 +139,9 @@ pub struct App {
     pub high_req_per_hour: Option<f64>,
 
     #[serde(default)]
+    pub cwd: Option<PathBuf>,
+
+    #[serde(default)]
     pub also_warm: Vec<String>,
 
     #[serde(skip)]
@@ -291,7 +294,7 @@ impl CommandSpec {
     }
 
     #[instrument(skip(self), fields(program = %self.program))]
-    pub fn run<C: Collector>(&mut self, opts: Option<RunOptions<C>>) {
+    pub fn run<C: Collector>(&mut self, cwd: Option<&PathBuf>, opts: Option<RunOptions<C>>) {
         let should_spawn = match self.child.as_mut() {
             Some(child) => match child.try_wait() {
                 Ok(Some(exit)) => {
@@ -314,13 +317,15 @@ impl CommandSpec {
             return;
         };
 
-        info!(args = ?self.args, "spawning command");
-        match tokio::process::Command::new(&self.program)
-            .args(&self.args)
+        info!(args = ?self.args, ?cwd, "spawning command");
+        let mut cmd = tokio::process::Command::new(&self.program);
+        cmd.args(&self.args)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-        {
+            .stderr(Stdio::piped());
+        if let Some(cwd) = cwd {
+            cmd.current_dir(cwd);
+        }
+        match cmd.spawn() {
             Ok(mut child) => {
                 if let Some(opts) = opts {
                     if let Some(stdout) = child.stdout.take() {
@@ -391,24 +396,24 @@ impl AppCommand {
     }
 
     #[instrument(skip(self))]
-    pub fn start<C: Collector>(&mut self, opts: Option<RunOptions<C>>) {
+    pub fn start<C: Collector>(&mut self, cwd: Option<&PathBuf>, opts: Option<RunOptions<C>>) {
         debug!("starting app command");
         let start = match self {
             AppCommand::Start(start) => start.as_mut(),
             AppCommand::StartEnd { start, .. } => start.as_mut(),
         };
 
-        start.run(opts);
+        start.run(cwd, opts);
     }
 
     #[instrument(skip(self))]
-    pub async fn stop(&mut self) {
+    pub async fn stop(&mut self, cwd: Option<&PathBuf>) {
         debug!("stopping app command");
         match self {
             AppCommand::Start(start) => start.kill().await,
             AppCommand::StartEnd { start, end } => {
                 start.kill().await;
-                end.run::<SqliteDatabase>(None)
+                end.run::<SqliteDatabase>(cwd, None)
             }
         };
     }
@@ -587,10 +592,14 @@ impl App {
             })?;
 
             info!(%address, "app not running, starting it");
-            guard.command.start(Some(RunOptions {
-                run_id,
-                collector: collector.clone(),
-            }));
+            let cwd = guard.cwd.clone();
+            guard.command.start(
+                cwd.as_ref(),
+                Some(RunOptions {
+                    run_id,
+                    collector: collector.clone(),
+                }),
+            );
 
             drop(guard);
             if let Err(e) = Self::wait_for_healthy(app).await {
@@ -644,10 +653,14 @@ impl App {
         let address = guard.address;
 
         info!(%address, "app not running, starting it (non-blocking)");
-        guard.command.start(Some(RunOptions {
-            run_id,
-            collector: collector.clone(),
-        }));
+        let cwd = guard.cwd.clone();
+        guard.command.start(
+            cwd.as_ref(),
+            Some(RunOptions {
+                run_id,
+                collector: collector.clone(),
+            }),
+        );
 
         drop(guard);
 
@@ -712,7 +725,8 @@ impl App {
                 info!("wait period elapsed, stopping app");
 
                 let mut guard = app.write().await;
-                guard.command.stop().await;
+                let cwd = guard.cwd.clone();
+                guard.command.stop(cwd.as_ref()).await;
                 guard.confirmed_healthy = false;
                 drop(guard);
                 if let Err(e) = collector.app_stopped(&host).await {
@@ -907,5 +921,87 @@ impl Config {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_app_with_cwd() {
+        let toml_str = r#"
+            ["myapp.example.com"]
+            address = "127.0.0.1:3001"
+            command = "node server.js"
+            health_check = "/"
+            cwd = "/opt/apps/myapp"
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        let app = config.apps.get("myapp.example.com").unwrap();
+        let guard = app.blocking_read();
+        assert_eq!(guard.cwd, Some(PathBuf::from("/opt/apps/myapp")));
+    }
+
+    #[test]
+    fn parse_app_without_cwd() {
+        let toml_str = r#"
+            ["myapp.example.com"]
+            address = "127.0.0.1:3001"
+            command = "node server.js"
+            health_check = "/"
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        let app = config.apps.get("myapp.example.com").unwrap();
+        let guard = app.blocking_read();
+        assert_eq!(guard.cwd, None);
+    }
+
+    #[test]
+    fn parse_app_with_start_end_command_and_cwd() {
+        let toml_str = r#"
+            ["myapp.example.com"]
+            address = "127.0.0.1:3001"
+            health_check = "/"
+            cwd = "/opt/apps/myapp"
+
+            ["myapp.example.com".command]
+            start = "docker start myapp"
+            end = "docker stop myapp"
+        "#;
+
+        let config: Config = toml::from_str(toml_str).unwrap();
+        let app = config.apps.get("myapp.example.com").unwrap();
+        let guard = app.blocking_read();
+        assert_eq!(guard.cwd, Some(PathBuf::from("/opt/apps/myapp")));
+        assert!(matches!(guard.command, AppCommand::StartEnd { .. }));
+    }
+
+    #[tokio::test]
+    async fn command_runs_in_cwd() {
+        let mut spec = CommandSpec::from_str("pwd").unwrap();
+        let cwd = std::env::temp_dir();
+        spec.run::<crate::db::SqliteDatabase>(Some(&cwd), None);
+
+        let child = spec.child.take().unwrap();
+        let output = child.wait_with_output().await.unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let canonical_tmp = std::fs::canonicalize(&cwd).unwrap();
+        assert_eq!(stdout.trim(), canonical_tmp.to_str().unwrap(),);
+    }
+
+    #[tokio::test]
+    async fn command_runs_without_cwd() {
+        let mut spec = CommandSpec::from_str("pwd").unwrap();
+        spec.run::<crate::db::SqliteDatabase>(None, None);
+
+        let child = spec.child.take().unwrap();
+        let output = child.wait_with_output().await.unwrap();
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        // Without cwd, should inherit the current working directory
+        let current_dir = std::env::current_dir().unwrap();
+        assert_eq!(stdout.trim(), current_dir.to_str().unwrap());
     }
 }

@@ -74,7 +74,11 @@ async fn check_app(hostname: &str, app: &Arc<RwLock<App>>) -> AppCheckResult {
 
     // Start the app
     info!(hostname = %hostname, "starting app");
-    app.write().await.command.start::<NoOpCollector>(None);
+    let cwd = app.read().await.cwd.clone();
+    app.write()
+        .await
+        .command
+        .start::<NoOpCollector>(cwd.as_ref(), None);
     result.start_success = true;
 
     // Wait for healthy
@@ -91,7 +95,7 @@ async fn check_app(hostname: &str, app: &Arc<RwLock<App>>) -> AppCheckResult {
 
     // Stop the app
     info!(hostname = %hostname, "stopping app");
-    app.write().await.command.stop().await;
+    app.write().await.command.stop(cwd.as_ref()).await;
 
     // Wait for stopped
     info!(hostname = %hostname, "waiting for app to stop");

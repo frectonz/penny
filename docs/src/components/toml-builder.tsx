@@ -19,6 +19,7 @@ interface AppConfig {
   command: string;
   startCommand: string;
   endCommand: string;
+  cwd: string;
   waitPeriod: string;
   adaptiveWait: boolean;
   minWaitPeriod: string;
@@ -60,6 +61,7 @@ function createApp(): AppConfig {
     command: "",
     startCommand: "",
     endCommand: "",
+    cwd: "",
     waitPeriod: "10m",
     adaptiveWait: false,
     minWaitPeriod: "5m",
@@ -129,6 +131,9 @@ function generateToml(
     } else if (app.command) {
       lines.push(`command = "${escapeToml(app.command)}"`);
     }
+
+    if (app.cwd) lines.push(`cwd = "${escapeToml(app.cwd)}"`);
+
 
     if (app.waitPeriod && app.waitPeriod !== "10m" && !app.adaptiveWait)
       lines.push(`wait_period = "${escapeToml(app.waitPeriod)}"`);
@@ -363,6 +368,16 @@ export function TomlBuilder() {
                       />
                     </>
                   )}
+
+                  <FormInput
+                    label="cwd"
+                    help="Working directory for the command"
+                    placeholder="/opt/apps/myapp"
+                    value={app.cwd}
+                    onChange={(e) =>
+                      updateApp(app.id, { cwd: e.target.value })
+                    }
+                  />
 
                   <FormInput
                     label="wait_period"

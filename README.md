@@ -58,6 +58,7 @@ acme_email = "you@example.com"
 ["app1.example.com"]
 address = "127.0.0.1:3001"
 command = "node server.js"
+cwd = "/opt/apps/app1"
 health_check = "/"
 wait_period = "10m"
 also_warm = ["app2.example.com"]
@@ -92,6 +93,7 @@ adaptive_wait = true
 |-------|---------|-------------|
 | `address` | *required* | Address the backend listens on |
 | `command` | *required* | Shell command to start the app (see [Start and Stop Commands](#start-and-stop-commands)) |
+| `cwd` | — | Working directory for the command |
 | `health_check` | *required* | HTTP path to check if the app is ready |
 | `wait_period` | `10m` | How long to wait after the last request before killing the process |
 | `adaptive_wait` | `false` | Enable adaptive idle timeout based on traffic patterns (see below) |
