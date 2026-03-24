@@ -8,10 +8,10 @@ Penny can install itself as a systemd user service on Linux, automatically start
 ## Quick Setup
 
 ```bash
-# Install and start the service
-penny systemd install penny.toml
+# Install and start the service (uses penny.toml in current directory)
+penny systemd install
 
-# With options
+# With explicit config path and options
 penny systemd install penny.toml --password mysecret --address 0.0.0.0:80
 ```
 

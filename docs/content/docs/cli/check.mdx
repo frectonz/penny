@@ -8,14 +8,14 @@ Validate your configuration by starting each app, running its health check, and 
 ## Usage
 
 ```
-penny check <config> [OPTIONS]
+penny check [config] [OPTIONS]
 ```
 
 ## Arguments
 
-| Argument | Description |
-|----------|-------------|
-| `<config>` | Path to the penny.toml configuration file |
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `[config]` | `penny.toml` | Path to the configuration file. Defaults to `penny.toml` in the current directory |
 
 ## Options
 
@@ -26,7 +26,10 @@ penny check <config> [OPTIONS]
 ## Examples
 
 ```bash
-# Check all apps
+# Check all apps (using default penny.toml)
+penny check
+
+# Check all apps with explicit config
 penny check penny.toml
 
 # Check specific apps

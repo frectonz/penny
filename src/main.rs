@@ -24,6 +24,26 @@ use db::SqliteDatabase;
 use proxy::YarpProxy;
 use tls::{CertificateStore, DynamicCertificates};
 
+const DEFAULT_CONFIG: &str = "penny.toml";
+
+fn resolve_config_path(config: Option<String>) -> color_eyre::Result<String> {
+    match config {
+        Some(path) => Ok(path),
+        None => {
+            let default = std::path::Path::new(DEFAULT_CONFIG);
+            if default.exists() {
+                Ok(DEFAULT_CONFIG.to_string())
+            } else {
+                Err(color_eyre::eyre::eyre!(
+                    "no config file specified and '{}' not found in the current directory.\n\
+                     Provide a config path explicitly: penny <command> <path>",
+                    DEFAULT_CONFIG
+                ))
+            }
+        }
+    }
+}
+
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Args {
@@ -35,8 +55,8 @@ struct Args {
 enum Command {
     /// Start the reverse proxy.
     Serve {
-        /// Path to the config file.
-        config: String,
+        /// Path to the config file. [default: penny.toml]
+        config: Option<String>,
 
         /// The HTTP address to bind to.
         #[arg(short, long, default_value = "0.0.0.0:80")]
@@ -56,8 +76,8 @@ enum Command {
     },
     /// Check app start/stop commands by running them.
     Check {
-        /// Path to the config file.
-        config: String,
+        /// Path to the config file. [default: penny.toml]
+        config: Option<String>,
 
         /// Optional list of specific apps to check (by hostname).
         #[arg(long, value_delimiter = ',')]
@@ -74,8 +94,8 @@ enum Command {
 enum SystemdAction {
     /// Install and start the penny systemd service.
     Install {
-        /// Path to the config file.
-        config: String,
+        /// Path to the config file. [default: penny.toml]
+        config: Option<String>,
 
         /// The HTTP address to bind to.
         #[arg(short, long, default_value = "0.0.0.0:80")]
@@ -210,6 +230,7 @@ fn main() -> color_eyre::Result<()> {
 
     match args.command {
         Command::Check { config, apps } => {
+            let config = resolve_config_path(config)?;
             let runtime = tokio::runtime::Runtime::new().context("creating tokio runtime")?;
             runtime.block_on(check::run_check(&config, apps))?;
             Ok(())
@@ -222,14 +243,17 @@ fn main() -> color_eyre::Result<()> {
                 no_tls,
                 password,
                 system,
-            } => systemd::install(systemd::InstallOpts {
-                config,
-                address,
-                https_address,
-                no_tls,
-                password,
-                system,
-            }),
+            } => {
+                let config = resolve_config_path(config)?;
+                systemd::install(systemd::InstallOpts {
+                    config,
+                    address,
+                    https_address,
+                    no_tls,
+                    password,
+                    system,
+                })
+            }
             SystemdAction::Uninstall { system } => systemd::uninstall(system),
             SystemdAction::Status { system } => systemd::status(system),
             SystemdAction::Logs { follow, system } => systemd::logs(follow, system),
@@ -242,6 +266,7 @@ fn main() -> color_eyre::Result<()> {
             no_tls,
             password,
         } => {
+            let config = resolve_config_path(config)?;
             auth::init_password(password.clone())?;
             info!(
                 config = %config,

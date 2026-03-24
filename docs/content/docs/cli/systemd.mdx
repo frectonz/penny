@@ -10,7 +10,7 @@ Manage Penny as a systemd user service (Linux only). Generates a unit file that 
 ### install
 
 ```
-penny systemd install <config> [OPTIONS]
+penny systemd install [config] [OPTIONS]
 ```
 
 Creates `~/.config/systemd/user/penny.service`, enables and starts it, and runs `loginctl enable-linger` so the service starts at boot without a login session.

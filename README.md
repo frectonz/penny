@@ -228,7 +228,7 @@ When using the table form, penny runs the `end` command on shutdown instead of k
 Start the reverse proxy.
 
 ```
-penny serve <config> [OPTIONS]
+penny serve [config] [OPTIONS]
 
 Options:
   --address <ADDR>         HTTP listen address [default: 0.0.0.0:80]
@@ -237,12 +237,14 @@ Options:
   --password <PASSWORD>    Password for dashboard access [env: PENNY_PASSWORD]
 ```
 
+All commands default to `penny.toml` in the current directory if no config path is given.
+
 ### `penny check`
 
 Validate your configuration by starting each app, running its health check, and stopping it.
 
 ```
-penny check <config> [OPTIONS]
+penny check [config] [OPTIONS]
 
 Options:
   --apps <HOSTS>    Comma-separated list of specific apps to check
@@ -253,7 +255,7 @@ Options:
 Manage penny as a systemd user service (Linux only). Generates a unit file that wraps `penny serve` in your login shell so your full PATH (nvm, cargo, etc.) is available.
 
 ```
-penny systemd install <config> [OPTIONS]
+penny systemd install [config] [OPTIONS]
 penny systemd uninstall
 penny systemd status
 penny systemd restart

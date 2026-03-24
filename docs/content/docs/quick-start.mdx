@@ -24,8 +24,10 @@ This tells Penny:
 ## 2. Start Penny
 
 ```bash
-penny serve penny.toml
+penny serve
 ```
+
+Since the config file is named `penny.toml`, you don't need to pass the path explicitly. You can also specify a custom path: `penny serve /path/to/config.toml`.
 
 That's it. Requests to `myapp.example.com` will start `node server.js`, proxy traffic to `127.0.0.1:3001`, and kill the process after 10 minutes of inactivity.
 
@@ -34,7 +36,7 @@ That's it. Requests to `myapp.example.com` will start `node server.js`, proxy tr
 Before deploying, you can validate your configuration:
 
 ```bash
-penny check penny.toml
+penny check
 ```
 
 This starts each app, runs its health check, and stops it to make sure everything works.
