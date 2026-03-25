@@ -231,6 +231,9 @@ fn main() -> color_eyre::Result<()> {
     match args.command {
         Command::Check { config, apps } => {
             let config = resolve_config_path(config)?;
+            let config_content = std::fs::read_to_string(&config).context("reading config file")?;
+            let mut config: Config = toml::from_str(&config_content)?;
+            config.load_cold_start_pages()?;
             let runtime = tokio::runtime::Runtime::new().context("creating tokio runtime")?;
             runtime.block_on(check::run_check(&config, apps))?;
             Ok(())
