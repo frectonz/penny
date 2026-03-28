@@ -1,7 +1,8 @@
-import { createSearchAPI, initAdvancedSearch } from "fumadocs-core/search/server";
+import { createSearchAPI } from "fumadocs-core/search/server";
 import { source } from "@/lib/source";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
+export const revalidate = false;
 
 const indexes = await Promise.all(
   source.getPages().map(async (page) => {
@@ -22,18 +23,10 @@ const indexes = await Promise.all(
       url: page.url,
       structuredData,
     };
-  })
+  }),
 );
 
-const server = initAdvancedSearch({
-  language: "english",
-  indexes,
-});
-
-const results = await server.search("install");
-console.log("Advanced search results:", JSON.stringify(results, null, 2));
-
-export const { GET } = createSearchAPI("advanced", {
+export const { staticGET: GET } = createSearchAPI("advanced", {
   language: "english",
   indexes,
 });
