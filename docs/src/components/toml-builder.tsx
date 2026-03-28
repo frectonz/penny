@@ -134,7 +134,6 @@ function generateToml(
 
     if (app.cwd) lines.push(`cwd = "${escapeToml(app.cwd)}"`);
 
-
     if (app.waitPeriod && app.waitPeriod !== "10m" && !app.adaptiveWait)
       lines.push(`wait_period = "${escapeToml(app.waitPeriod)}"`);
 
@@ -374,9 +373,7 @@ export function TomlBuilder() {
                     help="Working directory for the command"
                     placeholder="/opt/apps/myapp"
                     value={app.cwd}
-                    onChange={(e) =>
-                      updateApp(app.id, { cwd: e.target.value })
-                    }
+                    onChange={(e) => updateApp(app.id, { cwd: e.target.value })}
                   />
 
                   <FormInput
