@@ -35,6 +35,22 @@ jobs:
         run: nix develop -c pnpm build
         working-directory: ui
 
+      - name: Install Docs Dependencies
+        run: nix develop -c pnpm install --frozen-lockfile
+        working-directory: docs
+
+      - name: Run Docs Lint
+        run: nix develop -c pnpm lint
+        working-directory: docs
+
+      - name: Run Docs Typecheck
+        run: nix develop -c pnpm types:check
+        working-directory: docs
+
+      - name: Build Docs
+        run: nix develop -c pnpm build
+        working-directory: docs
+
       - name: Check Rust Formatting
         run: nix develop -c cargo fmt --check
 
