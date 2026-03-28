@@ -70,6 +70,7 @@ export default function Layout({ children }: LayoutProps<"/">) {
       <head>
         <script
           type="application/ld+json"
+          // biome-ignore lint: noDangerouslySetInnerHtml
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",

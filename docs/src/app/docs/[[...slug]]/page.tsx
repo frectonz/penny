@@ -38,6 +38,7 @@ export default async function Page(props: PageProps<"/docs/[[...slug]]">) {
     >
       <script
         type="application/ld+json"
+        // biome-ignore lint: noDangerouslySetInnerHtml
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <DocsTitle>{page.data.title}</DocsTitle>
