@@ -150,9 +150,7 @@ function AppDetailPage() {
       </div>
 
       {/* Error State */}
-      {error && (
-        <ErrorBanner {...getErrorDisplay(error)} />
-      )}
+      {error && <ErrorBanner {...getErrorDisplay(error)} />}
 
       {/* Loading State */}
       {isLoading && (
