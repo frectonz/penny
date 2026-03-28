@@ -22,8 +22,8 @@ import {
 } from '@/components/TimeRangeSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 import { $fetch, type AppOverview } from '@/lib/api';
-import { formatFailureRate, formatMs, formatRelativeTime } from '@/lib/format';
 import { getErrorDisplay } from '@/lib/error-utils';
+import { formatFailureRate, formatMs, formatRelativeTime } from '@/lib/format';
 import { timeRangeSearchSchema } from '@/lib/searchSchemas';
 
 export const Route = createFileRoute('/')({

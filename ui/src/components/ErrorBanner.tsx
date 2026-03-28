@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { AlertTriangle, ChevronDown } from 'lucide-react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 export function ErrorBanner({

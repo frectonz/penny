@@ -23,8 +23,8 @@ import {
   type TimeRangeValue,
 } from '@/components/TimeRangeSelector';
 import { $fetch } from '@/lib/api';
-import { formatFailureRate, formatMs, formatRelativeTime } from '@/lib/format';
 import { getErrorDisplay } from '@/lib/error-utils';
+import { formatFailureRate, formatMs, formatRelativeTime } from '@/lib/format';
 import { timeRangeSearchSchema } from '@/lib/searchSchemas';
 
 export const Route = createFileRoute('/app/$host')({
