@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SplatRouteImport } from './routes/$'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RunRunIdRouteImport } from './routes/run.$runId'
 import { Route as AppHostRouteImport } from './routes/app.$host'
 
+const SplatRoute = SplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,36 +37,47 @@ const AppHostRoute = AppHostRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
   '/app/$host': typeof AppHostRoute
   '/run/$runId': typeof RunRunIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
   '/app/$host': typeof AppHostRoute
   '/run/$runId': typeof RunRunIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
   '/app/$host': typeof AppHostRoute
   '/run/$runId': typeof RunRunIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/app/$host' | '/run/$runId'
+  fullPaths: '/' | '/$' | '/app/$host' | '/run/$runId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/app/$host' | '/run/$runId'
-  id: '__root__' | '/' | '/app/$host' | '/run/$runId'
+  to: '/' | '/$' | '/app/$host' | '/run/$runId'
+  id: '__root__' | '/' | '/$' | '/app/$host' | '/run/$runId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SplatRoute: typeof SplatRoute
   AppHostRoute: typeof AppHostRoute
   RunRunIdRoute: typeof RunRunIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/$': {
+      id: '/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof SplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SplatRoute: SplatRoute,
   AppHostRoute: AppHostRoute,
   RunRunIdRoute: RunRunIdRoute,
 }

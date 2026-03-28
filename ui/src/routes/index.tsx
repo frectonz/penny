@@ -23,6 +23,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { $fetch, type AppOverview } from '@/lib/api';
 import { formatFailureRate, formatMs, formatRelativeTime } from '@/lib/format';
+import { getErrorDisplay } from '@/lib/error-utils';
 import { timeRangeSearchSchema } from '@/lib/searchSchemas';
 
 export const Route = createFileRoute('/')({
@@ -247,7 +248,7 @@ function App() {
         <TimeRangeSelector value={timeRange} onChange={handleTimeRangeChange} />
       </div>
 
-      {error && <ErrorBanner message={`Error: ${error.message}`} />}
+      {error && <ErrorBanner {...getErrorDisplay(error)} />}
 
       {/* Stats Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">

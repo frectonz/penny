@@ -6,6 +6,7 @@ import { PageContainer } from '@/components/PageContainer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { $fetch, type LogEntry } from '@/lib/api';
+import { getErrorDisplay } from '@/lib/error-utils';
 
 export const Route = createFileRoute('/run/$runId')({
   component: RunDetailPage,
@@ -55,7 +56,7 @@ function RunDetailPage() {
 
       {/* Error State */}
       {error && (
-        <ErrorBanner message={error.message || 'Failed to load run logs'} />
+        <ErrorBanner {...getErrorDisplay(error)} />
       )}
 
       {/* Loading State */}

@@ -24,6 +24,7 @@ import {
 } from '@/components/TimeRangeSelector';
 import { $fetch } from '@/lib/api';
 import { formatFailureRate, formatMs, formatRelativeTime } from '@/lib/format';
+import { getErrorDisplay } from '@/lib/error-utils';
 import { timeRangeSearchSchema } from '@/lib/searchSchemas';
 
 export const Route = createFileRoute('/app/$host')({
@@ -150,9 +151,7 @@ function AppDetailPage() {
 
       {/* Error State */}
       {error && (
-        <ErrorBanner
-          message={error.message || 'Failed to load application data'}
-        />
+        <ErrorBanner {...getErrorDisplay(error)} />
       )}
 
       {/* Loading State */}
