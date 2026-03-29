@@ -30,6 +30,8 @@ export function ErrorBanner({
               <button
                 type="button"
                 onClick={() => setExpanded(!expanded)}
+                aria-label={expanded ? 'Hide details' : 'Show details'}
+                aria-expanded={expanded}
                 className="shrink-0 p-1 rounded hover:bg-destructive/20 transition-colors"
               >
                 <ChevronDown

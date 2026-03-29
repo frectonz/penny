@@ -14,6 +14,7 @@ import {
   type SharedProps,
 } from "fumadocs-ui/components/dialog/search";
 
+// Placeholder schema — overwritten when the static search index is loaded.
 function initOrama() {
   return create({
     schema: { _: "string" },

@@ -9,7 +9,7 @@ export function getErrorDisplay(error: unknown): ErrorDisplay {
     if (
       message.includes('fetch') ||
       message.includes('network') ||
-      message.includes('failed to')
+      message.includes('failed to fetch')
     ) {
       return {
         message: 'Unable to connect to Penny server. Make sure it is running.',
@@ -25,13 +25,14 @@ export function getErrorDisplay(error: unknown): ErrorDisplay {
       message.includes('expected object')
     ) {
       return {
-        message: 'Unable to connect to Penny server. Make sure it is running.',
+        message:
+          'Received an unexpected response from Penny server. Make sure it is running.',
         details: error.message,
       };
     }
     if (message.includes('connection refused')) {
       return {
-        message: 'Connection refused. Make sure Penny server is running.',
+        message: 'Unable to connect to Penny server. Make sure it is running.',
         details: error.message,
       };
     }
