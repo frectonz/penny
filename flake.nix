@@ -138,6 +138,14 @@
         }
       );
 
+      overlays.penny = _final: prev: {
+        penny = self.packages.${prev.system}.default;
+      };
+      overlays.default = self.overlays.penny;
+
+      nixosModules.penny = import ./module.nix;
+      nixosModules.default = self.nixosModules.penny;
+
       formatter = forAllSystems (
         pkgs:
         pkgs.treefmt.withConfig {
