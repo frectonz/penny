@@ -27,12 +27,6 @@ in
       description = "The HTTPS address to bind to.";
     };
 
-    noTls = lib.mkOption {
-      type = lib.types.bool;
-      default = false;
-      description = "Disable TLS even if configured in settings.";
-    };
-
     environmentFile = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = null;
@@ -94,7 +88,6 @@ in
                 address = cfg.address;
                 https-address = cfg.httpsAddress;
               }
-              // lib.optionalAttrs cfg.noTls { no-tls = true; }
             );
           in
           "${lib.getExe cfg.package} serve ${configFile} ${args}";
