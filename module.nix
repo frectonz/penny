@@ -83,12 +83,10 @@ in
 
         ExecStart =
           let
-            args = lib.cli.toCommandLineShellGNU { } (
-              {
-                address = cfg.address;
-                https-address = cfg.httpsAddress;
-              }
-            );
+            args = lib.cli.toCommandLineShellGNU { } {
+              address = cfg.address;
+              https-address = cfg.httpsAddress;
+            };
           in
           "${lib.getExe cfg.package} serve ${configFile} ${args}";
 
