@@ -89,7 +89,7 @@ in
 
         ExecStart =
           let
-            args = lib.cli.toGNUCommandLineShell { } (
+            args = lib.cli.toCommandLineShellGNU { } (
               {
                 address = cfg.address;
                 https-address = cfg.httpsAddress;

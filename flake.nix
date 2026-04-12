@@ -118,6 +118,7 @@
               pkgs.cmake
             ];
             cargoLock.lockFile = ./Cargo.lock;
+            meta.mainProgram = "penny";
 
             preBuild = ''
               cp -pr --reflink=auto -- ${ui} ui/dist
